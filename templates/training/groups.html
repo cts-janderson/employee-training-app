@@ -1,0 +1,15 @@
+{% extends "training/base.html" %}
+{% block title %}Groups · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Groups</h1><p class="muted">Organize employees for assignment review. Membership is checked when an assignment is submitted.</p></div></div>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <form class="card employee-form" method="post" action="{% url 'group_list' %}">{% csrf_token %}
+    <h2>Create group</h2>
+    <div class="group-form-fields"><div><label for="group-name">Group name</label><input id="group-name" name="name" maxlength="200" required></div><button type="submit">Create group</button></div>
+  </form>
+  <div class="section-heading"><h2>Group directory</h2><span class="section-count">{{ groups|length }} group{{ groups|length|pluralize }}</span></div>
+  <div class="collection-panel">
+    {% for group in groups %}<article class="collection-row group-row"><span class="record-icon group-icon" aria-hidden="true">G</span><div class="record-main"><h3><a href="{% url 'group_detail' group.id %}">{{ group.name }}</a></h3><p class="record-subtitle">{{ group.member_count }} member{{ group.member_count|pluralize }}</p></div><a class="button secondary" href="{% url 'group_detail' group.id %}">View group</a></article>
+    {% empty %}<p class="empty-state">No groups yet. Create one to organize assignment recipients.</p>{% endfor %}
+  </div>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% for option in question.options %}
+  <label class="choice"><input type="radio" name="{{ question.field_name }}" value="{{ option.value }}"
+    {% if option.selected %}checked{% endif %} {% if question.error %}aria-invalid="true" aria-describedby="error-{{ question.id }}"{% endif %}>
+    {{ option.text }}</label>
+{% endfor %}

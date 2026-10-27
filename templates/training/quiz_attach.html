@@ -1,0 +1,47 @@
+{% extends "training/base.html" %}
+{% block title %}Attach library quiz · Employee Training{% endblock %}
+{% block content %}
+  <p>{% if version.status == "published" %}<a href="{% url 'preview' training_id version.id %}">← Published version</a>{% else %}<a href="{% url 'quiz_editor' training_id %}">← Training quiz editor</a>{% endif %}</p>
+  <h1>Attach a library quiz to version {{ version.version_number }}</h1>
+  <p>This copies the saved library quiz into the draft. Later edits to either copy do not affect the other. Save other draft edits before attachment review.</p>
+  {% if conflict %}<section class="error" role="alert"><h2>The draft or library quiz changed</h2><p>No quiz was replaced. <a href="{% url 'attach_library_quiz' training_id %}?quiz={{ selected.quiz.id }}">Review the current saved versions</a>.</p></section>{% endif %}
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {% if version.status == "published" %}
+    <p>This training version was published. <a href="{% url 'preview' training_id version.id %}">Review the published version</a>.</p>
+  {% else %}
+    <h2>Choose a library quiz</h2>
+    <ul>{% for row in rows %}<li><a href="{% url 'attach_library_quiz' training_id %}?quiz={{ row.quiz.id }}">{{ row.quiz.title|default:"Untitled quiz" }}</a> · {{ row.question_count }} question{{ row.question_count|pluralize }} · {% if row.problems %}Needs work{% else %}Ready{% endif %}</li>{% empty %}<li>No library quizzes yet. <a href="{% url 'library_quiz_list' %}">Create one</a>.</li>{% endfor %}</ul>
+    {% if selected %}
+      <section class="card">
+        <h2>Review saved quiz: {{ selected.quiz.title|default:"Untitled quiz" }}</h2>
+        <p>Passing threshold: {{ selected.quiz.passing_percent|default_if_none:"Not set" }}{% if selected.quiz.passing_percent %}%{% endif %}</p>
+        {% for question in selected_questions %}
+          <h3>Question {{ question.position }} · {{ question.type_label }}</h3><p class="plain-text">{{ question.prompt }}</p>
+          <ol>{% for option in question.options %}<li>{{ option.text }}{% if option.correct %} — correct{% endif %}{% if option.rank %} — required rank {{ option.rank }}{% endif %}</li>{% endfor %}</ol>
+        {% endfor %}
+        {% if selected.problems %}
+          <h3>Needs work before attachment</h3>
+          <ul>{% for problem in selected.problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+          <a href="{% url 'library_quiz_editor' selected.quiz.id %}">Edit library quiz</a>
+        {% endif %}
+      </section>
+      {% if current %}
+        <section class="card"><h2>Current draft quiz will be replaced</h2>
+          <p>{{ current.title|default:"Untitled quiz" }} · {{ current_questions|length }} question{{ current_questions|length|pluralize }} · Passing threshold {{ current.passing_percent|default_if_none:"Not set" }}{% if current.passing_percent %}%{% endif %}</p>
+          <ol>{% for question in current_questions %}<li><strong>{{ question.prompt|default:"Untitled question" }}</strong> · {{ question.type_label }}<ul>{% for option in question.options %}<li>{{ option.text }}{% if option.correct %} — correct{% endif %}{% if option.rank %} — required rank {{ option.rank }}{% endif %}</li>{% endfor %}</ul></li>{% endfor %}</ol>
+          <p>The current draft quiz will be removed when you confirm. Published versions and library quizzes remain unchanged.</p>
+        </section>
+      {% endif %}
+      {% if not selected.problems and not conflict and not error %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="version_id" value="{{ version.id }}">
+          <input type="hidden" name="version_revision" value="{{ version.revision }}">
+          <input type="hidden" name="quiz_id" value="{{ selected.quiz.id }}">
+          <input type="hidden" name="quiz_revision" value="{{ selected.quiz.revision }}">
+          {% if current %}<button class="danger" type="submit" name="confirm" value="replace">Replace current quiz with copy</button>{% else %}<button type="submit" name="confirm" value="attach">Attach a copy of this quiz</button>{% endif %}
+        </form>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+{% endblock %}

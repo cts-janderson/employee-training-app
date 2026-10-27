@@ -1,0 +1,68 @@
+{% extends "training/base.html" %}
+{% block title %}Review publication · Employee Training{% endblock %}
+{% block content %}
+  <p>{% if published_conflict %}<a href="{% url 'preview' version.training_id version.id %}">← Published version</a>{% else %}<a href="{% url 'draft_editor' version.training_id %}">← Draft editor</a>{% endif %}</p>
+  <h1>Review saved version {{ version.version_number }}</h1>
+  {% if conflict %}
+    <section class="error" role="alert" id="review-conflict" tabindex="-1">
+      {% if published_conflict %}
+        <h2>This version has already been published</h2>
+        <p>No new version was created.</p>
+        <a href="{% url 'preview' version.training_id version.id %}">Review published version</a>
+      {% else %}
+        <h2>The saved draft changed after your review</h2>
+        <p>Publication was stopped. Review the current saved content before publishing.</p>
+        <a href="{% url 'publication_review' version.training_id %}">Review current saved version</a>
+      {% endif %}
+    </section>
+  {% endif %}
+  <p>This page shows saved content only. Save changes in the slide or quiz editor before reviewing again.</p>
+  <p>Publishing makes this version immutable. It does not assign the training automatically.</p>
+  {% if blocker_groups %}
+    <section class="error" aria-labelledby="blockers-heading">
+      <h2 id="blockers-heading">Fix these items before publication</h2>
+      {% for group in blocker_groups %}
+        <h3>{{ group.label }}</h3>
+        <ul>{% for item in group.items %}<li><a href="{{ item.href }}">{{ item.message }}</a></li>{% endfor %}</ul>
+      {% endfor %}
+    </section>
+  {% endif %}
+  <section class="card">
+    <h2>{{ version.title|default:"Untitled training" }}</h2>
+    {% if version.description %}<div class="plain-text">{{ version.description }}</div>{% else %}<p class="muted">No description.</p>{% endif %}
+    <p>{{ slide_count }} slide{{ slide_count|pluralize }} in saved order</p>
+  </section>
+  {% for slide in slides %}
+    <section class="card">
+      <p class="muted">Slide {{ slide.position }}</p>
+      <h2 class="plain-text">{{ slide.header|default:"Untitled slide" }}</h2>
+      <div class="plain-text">{{ slide.body }}</div>
+      {% if slide.footer %}<hr><div class="plain-text muted">{{ slide.footer }}</div>{% endif %}
+    </section>
+  {% endfor %}
+  {% if version.materials.exists %}<section class="card"><h2>Supporting material</h2><ol>{% for material in version.materials.all %}<li>{{ material.name|default:"Untitled material" }} · {{ material.url|default:"No link" }}{% if material.description %}<p>{{ material.description }}</p>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
+  <section class="card">
+    <h2>Quiz</h2>
+    {% if quiz %}
+      <p>{{ question_count }} question{{ question_count|pluralize }} · Passing threshold: {{ quiz.passing_percent|default_if_none:"Not set" }}{% if quiz.passing_percent %}%{% endif %}</p>
+      <p class="muted">Answer choices may appear in a different order for employees.</p>
+      {% for question in questions %}
+        <section>
+          <h3>Question {{ question.position }} · {{ question.get_type_display }}</h3>
+          <p class="plain-text">{{ question.prompt }}</p>
+          <ol>{% for option in question.options.all %}<li class="plain-text">{{ option.text }}{% if option.is_correct %} <span class="muted">(correct answer)</span>{% endif %}{% if option.required_rank %} <span class="muted">(required rank {{ option.required_rank }})</span>{% endif %}</li>{% endfor %}</ol>
+        </section>
+      {% endfor %}
+    {% else %}<p>No quiz in this version.</p>{% endif %}
+  </section>
+  {% if not blocker_groups and not conflict %}
+    <form method="post" action="{% url 'publication_review' version.training_id %}">
+      {% csrf_token %}
+      <input type="hidden" name="version_id" value="{{ version.id }}">
+      <input type="hidden" name="revision" value="{{ version.revision }}">
+      <button type="submit">Publish version {{ version.version_number }}</button>
+    </form>
+  {% endif %}
+  {% if not published_conflict %}<div class="actions"><a href="{% url 'draft_editor' version.training_id %}">Edit slides</a><a href="{% url 'quiz_editor' version.training_id %}">Edit quiz</a></div>{% endif %}
+  {% if conflict %}<script>document.getElementById("review-conflict").focus();</script>{% endif %}
+{% endblock %}

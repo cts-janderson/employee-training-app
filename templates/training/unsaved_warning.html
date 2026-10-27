@@ -1,0 +1,22 @@
+<script>
+  (() => {
+    const form = document.getElementById("editor-form");
+    const state = document.getElementById("save-state");
+    if (!form) return;
+    let dirty = form.dataset.unsaved === "true";
+    let submitting = false;
+    const markDirty = () => {
+      dirty = true;
+      if (state) state.textContent = "Unsaved changes.";
+    };
+    form.addEventListener("input", markDirty);
+    form.addEventListener("change", markDirty);
+    form.addEventListener("submit", () => { submitting = true; });
+    window.addEventListener("beforeunload", (event) => {
+      if (dirty && !submitting) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    });
+  })();
+</script>

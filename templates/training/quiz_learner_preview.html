@@ -1,0 +1,29 @@
+{% extends "training/base.html" %}
+{% block title %}Learner quiz preview · Employee Training{% endblock %}
+{% block content %}
+  <p class="quiz-back">{% if quiz.version_id %}{% if quiz.version.status == "draft" %}<a href="{% url 'quiz_editor' quiz.version.training_id %}">← Quiz editor</a>{% else %}<a href="{% url 'preview' quiz.version.training_id quiz.version_id %}">← Published version</a>{% endif %}{% else %}<a href="{% url 'library_quiz_editor' quiz.id %}">← Quiz editor</a>{% endif %}</p>
+  <div class="page-heading quiz-take-heading"><div><p class="eyebrow">Learner preview</p><h1>{% if quiz.version_id %}{{ quiz.version.title|default:"Untitled training" }} quiz{% else %}{{ quiz.title|default:"Untitled quiz" }}{% endif %}</h1>
+    <p class="muted">This shows the saved quiz as a learner sees it. Your selections are not recorded, and answer keys are hidden.</p></div>
+    <span class="quiz-question-count">{{ questions|length }} question{{ questions|length|pluralize }}</span>
+  </div>
+  <div class="quiz-take-questions">
+    {% for question in questions %}
+      <fieldset class="card quiz-take-question" {% if question.ranked %}data-ordering{% endif %}>
+        <legend><strong class="plain-text">Question {{ question.position }}: {{ question.prompt|default:"(Prompt not set)" }}</strong></legend>
+        {% include question.take_template %}
+      </fieldset>
+    {% empty %}<p>No questions have been saved yet.</p>{% endfor %}
+  </div>
+  <script>
+    document.querySelectorAll("[data-ordering]").forEach((group) => {
+      const selects = [...group.querySelectorAll("select")];
+      const updateChoices = () => {
+        const chosen = new Set(selects.map((select) => select.value).filter(Boolean));
+        selects.forEach((select) => select.querySelectorAll("option").forEach((option) => {
+          option.disabled = Boolean(option.value && option.value !== select.value && chosen.has(option.value));
+        }));
+      };
+      selects.forEach((select) => select.addEventListener("change", updateChoices));
+    });
+  </script>
+{% endblock %}

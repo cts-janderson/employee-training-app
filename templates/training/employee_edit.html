@@ -1,0 +1,29 @@
+{% extends "training/base.html" %}
+{% block title %}Edit employee · Employee Training{% endblock %}
+{% block content %}
+  <p><a href="{{ back_url|default:'/employees/' }}">← Employees</a></p>
+  <h1>Edit {{ employee.name }}</h1>
+  <p class="muted">Local sink address: {% if employee.verified_email == employee.email %}{{ employee.verified_email }} (synthetically confirmed){% else %}unverified — notifications will be blocked{% endif %}. Saving a .test address confirms it for local testing.</p>
+  {% if error %}<p class="error" role="alert"><a href="#employee-{{ error_field }}">{{ error }}</a></p>{% endif %}
+  <form class="card stack" method="post">
+    {% csrf_token %}
+    <div><label for="employee-name">Name</label><input id="employee-name" name="name" value="{{ form_name }}" required maxlength="200" {% if error_field == "name" %}aria-invalid="true" aria-describedby="employee-error"{% endif %}></div>
+    <div><label for="employee-email">Email</label><input id="employee-email" name="email" type="email" value="{{ form_email }}" required {% if error_field == "email" %}aria-invalid="true" aria-describedby="employee-error"{% endif %}></div>
+    {% if error %}<p class="field-error" id="employee-error">{{ error }}</p>{% endif %}
+    <label><input id="employee-active" style="width:auto" type="checkbox" name="active" {% if form_active %}checked{% endif %} {% if error_field == "active" %}aria-invalid="true" aria-describedby="employee-error"{% endif %}> Active</label>
+    <div><button type="submit">Save employee</button></div>
+  </form>
+  <h2>Profile history</h2>
+  {% for change in changes %}
+    <div class="card">
+      <p>{{ change.changed_at }} · changed by {{ change.actor.name }}</p>
+      <p>Name: {{ change.old_name }} → {{ change.new_name }}<br>Email: {{ change.old_email }} → {{ change.new_email }}</p>
+    </div>
+  {% empty %}
+    <p>No name or email changes.</p>
+  {% endfor %}
+  <h2>Activity history</h2>
+  {% for change in activity_changes %}
+    <div class="card"><p>{{ change.changed_at }} · changed by {{ change.actor.name }}</p><p>{% if change.is_active %}Reactivated{% else %}Deactivated{% endif %}</p></div>
+  {% empty %}<p>No activity changes.</p>{% endfor %}
+{% endblock %}

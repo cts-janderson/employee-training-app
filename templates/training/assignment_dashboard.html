@@ -1,0 +1,96 @@
+{% extends "training/base.html" %}
+{% load tz %}
+{% block title %}Assignments · Employee Training{% endblock %}
+{% block extra_head %}<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><h1>Assignments</h1></div></div>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <nav class="chart-mode-nav" aria-label="Assignment chart mode">
+    <a href="{{ pending_mode_url }}" {% if show_pending_chart %}aria-current="page"{% endif %}>Pending workload</a>
+    <a href="{{ quiz_mode_url }}" {% if chart_mode == "quiz" %}aria-current="page"{% endif %}>Quiz outcomes</a>
+  </nav>
+  <form class="card assignment-filters" method="get" aria-label="Filter assignments">
+    {% if chart_mode == "quiz" %}<input type="hidden" name="mode" value="quiz">{% endif %}
+    {% if filters.q %}<input type="hidden" name="q" value="{{ filters.q }}">{% endif %}
+    <div class="filter-heading"><h2>Filter assignments</h2></div>
+    <div class="filter-grid">
+      {% if chart_mode != "quiz" %}
+      <div><label for="state">Assignment state</label><select id="state" name="state">
+        <option value="pending" {% if filters.state == "pending" %}selected{% endif %}>Pending</option>
+        <option value="completed" {% if filters.state == "completed" %}selected{% endif %}>Completed</option>
+        <option value="canceled" {% if filters.state == "canceled" %}selected{% endif %}>Canceled</option>
+        <option value="waived" {% if filters.state == "waived" %}selected{% endif %}>Waived</option>
+        <option value="archived" {% if filters.state == "archived" %}selected{% endif %}>Archived</option>
+        <option value="all" {% if filters.state == "all" %}selected{% endif %}>All</option>
+      </select></div>
+      {% endif %}
+      <div><label for="activity">Employee activity</label><select id="activity" name="activity">
+        <option value="active" {% if filters.activity == "active" %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if filters.activity == "inactive" %}selected{% endif %}>Inactive</option>
+        <option value="all" {% if filters.activity == "all" %}selected{% endif %}>All</option>
+      </select></div>
+      <div><label for="employee">Employee</label><select id="employee" name="employee">
+        <option value="">All employees</option>
+        {% for row in employees %}<option value="{{ row.employee.id }}" {% if row.selected %}selected{% endif %}>{{ row.employee.name }}</option>{% endfor %}
+      </select></div>
+      <div><label for="training">Training</label><select id="training" name="training">
+        <option value="">All trainings</option>
+        {% for row in trainings %}<option value="{{ row.id }}" {% if row.selected %}selected{% endif %}>{{ row.label }}</option>{% endfor %}
+      </select></div>
+      {% if chart_mode != "quiz" %}
+      <div><label for="progress">Progress</label><select id="progress" name="progress">
+        <option value="all" {% if filters.progress == "all" %}selected{% endif %}>All</option>
+        <option value="not_started" {% if filters.progress == "not_started" %}selected{% endif %}>Not started</option>
+        <option value="in_progress" {% if filters.progress == "in_progress" %}selected{% endif %}>In progress</option>
+        <option value="completed" {% if filters.progress == "completed" %}selected{% endif %}>Completed</option>
+      </select></div>
+      <div><label for="deadline">Deadline status</label><select id="deadline" name="deadline">
+        <option value="all" {% if filters.deadline == "all" %}selected{% endif %}>All</option>
+        <option value="on_time" {% if filters.deadline == "on_time" %}selected{% endif %}>On time</option>
+        <option value="overdue" {% if filters.deadline == "overdue" %}selected{% endif %}>Overdue</option>
+        <option value="completed_late" {% if filters.deadline == "completed_late" %}selected{% endif %}>Completed late</option>
+      </select></div>
+      {% endif %}
+    </div>
+    <div class="actions"><button type="submit">Apply filters</button><a class="button secondary" href="{% url 'assignment_dashboard' %}{% if chart_mode == 'quiz' %}?mode=quiz{% endif %}">Reset</a></div>
+  </form>
+  {% if chart_mode == "quiz" and not error %}
+    {% if quiz_chart %}{% include "training/_quiz_outcomes_chart.html" %}
+    {% else %}<section class="relay-board relay-empty" aria-label="Quiz outcomes overview">
+      <h2>Quiz outcomes by training</h2>
+      <p>No quiz assignments match these filters.</p>
+    </section>{% endif %}
+  {% elif show_pending_chart %}
+    {% if chart %}{% include "training/_assignment_relay_chart.html" %}
+    {% else %}<section class="relay-board relay-empty" aria-label="Pending assignment overview">
+      <h2>Pending assignments by training</h2>
+      <p>No pending assignments match these filters.</p>
+    </section>{% endif %}
+  {% endif %}
+  {% if browse %}{% with browse_label="assignments" %}{% include "training/_browse_controls.html" %}{% endwith %}{% endif %}
+  <section class="section-heading"><h2>Results · {% if browse %}{{ browse.total }} assignment{{ browse.total|pluralize }}{% else %}0 assignments{% endif %}</h2>
+    {% if active_filters %}<p class="section-count">{% for item in active_filters %}{{ item }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    {% if not error and chart_mode != "quiz" %}<a class="button secondary" href="{% url 'export_assignments' %}?{{ filter_query }}">Export CSV</a>{% endif %}
+  </section>
+  <div class="collection-panel assignment-results" aria-label="Assignment results">
+  {% if rows %}<div class="assignment-results-header" aria-hidden="true"><span>Assignment</span><span>Status</span><span>Actions</span></div>{% endif %}
+  {% for row in rows %}
+    <article class="collection-row assignment-row" aria-labelledby="assignment-{{ row.assignment.id }}">
+      <div class="assignment-results-identity">
+      <span class="person-avatar" aria-hidden="true">{{ row.assignment.employee.name|first|upper|default:"?" }}</span>
+        <div class="record-main">
+          <h3 id="assignment-{{ row.assignment.id }}">{{ row.assignment.employee.name }} · {{ row.assignment.version.title }}</h3>
+          <p class="record-subtitle">Due {{ row.assignment.due_date }} ({{ row.assignment.due_timezone }}){% if row.assignment.version.version_number > 1 %} · Version {{ row.assignment.version.version_number }}{% endif %}{% if row.assignment.cycle_number > 1 %} · Cycle {{ row.assignment.cycle_number }}{% endif %}{% if not row.assignment.employee.is_active %} · Inactive employee{% endif %}</p>
+          {% if row.next_scheduled_reminder %}<p class="record-subtitle">Next reminder: {{ row.next_scheduled_reminder.get_kind_display }} at {% timezone org_time_zone %}{{ row.next_scheduled_reminder.scheduled_at }}{% endtimezone %} ({{ org_time_zone }})</p>{% endif %}
+          {% if row.manual_next_at %}<p class="record-subtitle">Rate limited until {% timezone org_time_zone %}{{ row.manual_next_at }}{% endtimezone %} ({{ org_time_zone }}). Manual reminder unavailable.</p>{% endif %}
+          <details class="record-details"><summary>Scores and timing</summary><p>Latest score: {{ row.latest_score }} · Passing score: {{ row.passing_score }} · Completed: {{ row.assignment.completed_at|default:"—" }}</p></details>
+        </div>
+      </div>
+      <div class="record-status assignment-results-status"><span class="row-field-label">Status</span>{% if row.deadline != '—' %}<span class="badge {% if row.deadline == 'Overdue' %}amber{% elif row.state == 'Completed' %}success{% endif %}">{{ row.deadline }}</span>{% endif %}<small>{% if filters.state == 'pending' and chart_mode != 'quiz' %}{{ row.progress }}{% else %}{{ row.state }}{% if row.progress != row.state %} · {{ row.progress }}{% endif %}{% endif %}</small></div>
+      <div class="record-actions assignment-results-actions"><a class="button secondary" href="{% url 'assignment_admin_detail' row.assignment.id %}?return_to={{ browse.return_to|urlencode }}">Open assignment</a>
+        {% if row.manual_can_send %}<form method="post" action="{% url 'send_manual_nudge' row.assignment.id %}">{% csrf_token %}<button class="secondary" type="submit">Send reminder</button></form>{% endif %}
+      </div>
+    </article>
+  {% empty %}<p class="empty-state">No assignments match these filters. <a href="{% url 'assignment_dashboard' %}{% if chart_mode == 'quiz' %}?mode=quiz{% endif %}">Reset filters</a>.</p>{% endfor %}
+  </div>
+{% endblock %}

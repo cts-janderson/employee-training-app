@@ -1,0 +1,13 @@
+{% extends "training/base.html" %}
+{% block title %}Quiz unavailable · Employee Training{% endblock %}
+{% block content %}
+  <h1>Quiz unavailable</h1>
+  <p class="error" role="status">{{ message }}</p>
+  {% if current_assignment %}
+    <p><a class="button" href="{% url 'assignment_detail' current_assignment.id %}">Open current assignment</a></p>
+  {% elif assignment.ending == "completed" or assignment.ending == "waived" %}
+    <p><a class="button" href="{% url 'assignment_detail' assignment.id %}">Review assignment and attempt history</a></p>
+  {% else %}
+    <p><a class="button" href="{% url 'my_training' %}">Go to My training</a></p>
+  {% endif %}
+{% endblock %}

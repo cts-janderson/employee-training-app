@@ -1,0 +1,42 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1d37">
+  <title>{% block title %}Employee Training{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'training/app.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Application navigation">
+      <a class="brand" href="{% url 'my_training' %}" aria-label="Employee Training home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
+        <span>Employee<br>Training</span>
+      </a>
+      <nav class="primary-nav" aria-label="Main navigation">
+        <a href="{% url 'my_training' %}" {% if request.resolver_match.url_name == 'my_training' or request.resolver_match.url_name == 'assignment_detail' or request.resolver_match.url_name == 'assignment_slide' or request.resolver_match.url_name == 'take_quiz' or request.resolver_match.url_name == 'quiz_result' %}aria-current="page"{% endif %}>My training</a>
+        {% if request.employee.role == "administrator" %}
+          <p class="nav-caption">Manage</p>
+          <a href="{% url 'training_list' %}" {% if request.resolver_match.url_name == 'training_list' or request.resolver_match.url_name == 'draft_editor' or request.resolver_match.url_name == 'publication_review' or request.resolver_match.url_name == 'preview' or request.resolver_match.url_name == 'assign_training' or request.resolver_match.url_name == 'renew_training' or request.resolver_match.url_name == 'quiz_editor' or request.resolver_match.url_name == 'attach_library_quiz' %}aria-current="page"{% endif %}>Trainings</a>
+          <a href="{% url 'library_quiz_list' %}" {% if request.resolver_match.url_name == 'library_quiz_list' or request.resolver_match.url_name == 'library_quiz_editor' %}aria-current="page"{% endif %}>Quizzes</a>
+          <a href="{% url 'employee_directory' %}" {% if request.resolver_match.url_name == 'employee_directory' or request.resolver_match.url_name == 'edit_employee' %}aria-current="page"{% endif %}>Employees</a>
+          <a href="{% url 'group_list' %}" {% if request.resolver_match.url_name == 'group_list' or request.resolver_match.url_name == 'group_detail' %}aria-current="page"{% endif %}>Groups</a>
+          <a href="{% url 'assignment_dashboard' %}" {% if request.resolver_match.url_name == 'assignment_dashboard' or request.resolver_match.url_name == 'assignment_admin_detail' %}aria-current="page"{% endif %}>Assignments</a>
+          <a href="{% url 'notification_log' %}" {% if request.resolver_match.url_name == 'notification_log' or request.resolver_match.url_name == 'notification_detail' %}aria-current="page"{% endif %}>Notifications</a>
+        {% endif %}
+      </nav>
+      <div class="sidebar-footer"><span class="sidebar-footer-label">Local workspace</span><a href="{% url 'demo_switch' %}" {% if request.resolver_match.url_name == 'demo_switch' %}aria-current="page"{% endif %}>Switch demo employee</a></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        {% if request.employee %}<div class="actor"><span class="actor-avatar" aria-hidden="true">{{ request.employee.name|first|upper|default:"?" }}</span><span><strong>{{ request.employee.name }}</strong><small>{{ request.employee.get_role_display }}</small></span></div>{% endif %}
+      </header>
+      <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
+    </div>
+  </div>
+</body>
+</html>

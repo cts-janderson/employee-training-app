@@ -1,0 +1,60 @@
+{% extends "training/base.html" %}
+{% block title %}Assign training · Employee Training{% endblock %}
+{% block content %}
+  <p><a href="{% url 'training_list' %}">← Trainings</a></p>
+  <h1>Assign {{ training_title }}</h1>
+  <p class="muted">Each selected employee gets a separate assignment pinned to the selected published version.</p>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {% if results %}
+    <section class="card" role="status">
+      <h2>Assignment results</h2>
+      <p>{{ result_counts.created }} created · {{ result_counts.already_assigned }} already assigned · {{ result_counts.conflict }} conflicts · {{ result_counts.inactive }} inactive</p>
+      <p>Assignment email is queued separately for delivery. A created assignment does not mean its email was sent.</p>
+      <ul>{% for result in results %}<li>{{ result.employee.name }}: {{ result.get_outcome_display }} — {{ result.detail }}{% if result.assignment %} <a href="{% url 'assignment_admin_detail' result.assignment.id %}">View assignment</a>{% endif %}</li>{% endfor %}</ul>
+    </section>
+  {% endif %}
+  {% if review %}
+    <section class="card" aria-labelledby="review-heading">
+      <h2 id="review-heading">Review assignment</h2>
+      <p><strong>{{ review.version.title }}</strong> · Version {{ review.version.version_number }}</p>
+      <p>Due {{ review.due_date }} ({{ review.zone_name }}) · {{ review.count }} recipient{{ review.count|pluralize }}</p>
+      {% if review.group_id %}<p>Group: {{ review.group_name }}. Membership is read again when you submit.</p>{% endif %}
+      <p class="muted">These recipient checks are provisional. Final submission checks current assignments and employee activity again.</p>
+      <ul>{% for row in review.rows %}<li><strong>{{ row.employee.name }}</strong> ({{ row.employee.email }}) — {{ row.status }}</li>{% endfor %}</ul>
+    </section>
+    <form method="post" class="actions">
+      {% csrf_token %}
+      <input type="hidden" name="operation_id" value="{{ operation_id }}">
+      <input type="hidden" name="version_id" value="{{ review.version.id }}">
+      <input type="hidden" name="due_date" value="{{ selected_due_date }}">
+      <input type="hidden" name="recipient_source" value="{{ review.source }}">
+      {% if review.group_id %}<input type="hidden" name="group_id" value="{{ review.group_id }}">{% else %}{% for row in review.rows %}<input type="hidden" name="employee_id" value="{{ row.employee.id }}">{% endfor %}{% endif %}
+      <button type="submit" name="action" value="submit">Assign {{ review.count }} employee{{ review.count|pluralize }}</button>
+      <button class="secondary" type="submit" name="action" value="edit">Edit selection</button>
+    </form>
+  {% else %}
+  <form class="card stack" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="operation_id" value="{{ operation_id }}">
+    <div>
+      <label for="version">Published version</label>
+      <select id="version" name="version_id" required>
+        {% for row in version_rows %}<option value="{{ row.version.id }}" {% if row.selected %}selected{% endif %}>Version {{ row.version.version_number }}: {{ row.version.title }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label for="due-date">Due date ({{ org_time_zone }})</label><input id="due-date" name="due_date" type="date" value="{{ selected_due_date }}" required></div>
+    <fieldset><legend>Recipient source</legend>
+      <label><input type="radio" name="recipient_source" value="employees" {% if selected_source == "employees" %}checked{% endif %}>Employees</label>
+      <label><input type="radio" name="recipient_source" value="group" {% if selected_source == "group" %}checked{% endif %}>Group</label>
+    </fieldset>
+    <fieldset>
+      <legend>Employees</legend>
+      {% for row in employee_rows %}
+        <label><input style="width:auto" type="checkbox" name="employee_id" value="{{ row.employee.id }}" {% if row.selected %}checked{% endif %}> {{ row.employee.name }} ({{ row.employee.email }}){% if not row.employee.is_active %} — inactive{% endif %}</label>
+      {% endfor %}
+    </fieldset>
+    <div><label for="group-id">Employee group</label><select id="group-id" name="group_id"><option value="">Choose a group</option>{% for row in group_rows %}<option value="{{ row.group.id }}" {% if row.selected %}selected{% endif %}>{{ row.group.name }} ({{ row.member_count }} members)</option>{% endfor %}</select></div>
+    <div><button type="submit" name="action" value="review">Review selected employees</button></div>
+  </form>
+  {% endif %}
+{% endblock %}

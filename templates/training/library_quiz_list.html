@@ -1,0 +1,28 @@
+{% extends "training/base.html" %}
+{% block title %}Quiz library · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><p class="eyebrow">Reusable assessments</p><h1>Quizzes</h1><p class="muted">Build a quiz once, then attach an independent copy to any training draft.</p></div>
+    <form method="post" action="{% url 'new_library_quiz' %}">{% csrf_token %}<button type="submit">Create library quiz</button></form>
+  </div>
+  <div class="section-heading"><h2>Quiz library</h2><span class="section-count">{{ browse.total }} quiz{{ browse.total|pluralize:"zes" }}</span></div>
+  {% with browse_label="quizzes" %}{% include "training/_browse_controls.html" %}{% endwith %}
+  <div class="collection-panel quiz-library">
+    {% if rows %}<div class="quiz-library-header" aria-hidden="true"><span>Quiz</span><span>Questions</span><span>Passing threshold</span><span>Readiness</span><span>Action</span></div>{% endif %}
+    {% for row in rows %}
+      <article class="quiz-library-row" aria-labelledby="quiz-{{ row.quiz.id }}">
+        <div class="quiz-library-identity">
+          <div class="record-icon quiz-icon" aria-hidden="true">Q</div>
+          <div class="record-main">
+            <h3 id="quiz-{{ row.quiz.id }}">{{ row.quiz.title|default:"Untitled quiz" }}</h3>
+            {% if not row.problems %}<details class="record-details"><summary>Attach to a training draft</summary><ul>{% for draft in drafts %}<li><a href="{% url 'attach_library_quiz' draft.training_id %}?quiz={{ row.quiz.id }}">{{ draft.title|default:"Untitled training" }} · Version {{ draft.version_number }}</a></li>{% empty %}<li>No training drafts yet. <a href="{% url 'training_list' %}">Create a training</a>.</li>{% endfor %}</ul></details>{% endif %}
+          </div>
+        </div>
+        <div class="quiz-library-fact"><span class="quiz-library-mobile-label">Questions</span><strong>{{ row.question_count }}</strong></div>
+        <div class="quiz-library-fact"><span class="quiz-library-mobile-label">Passing threshold</span><strong>{% if row.quiz.passing_percent %}{{ row.quiz.passing_percent }}%{% else %}Not set{% endif %}</strong></div>
+        <div class="record-status"><span class="quiz-library-mobile-label">Readiness</span><span class="badge {% if row.problems %}amber{% else %}success{% endif %}">{% if row.problems %}Needs work before attachment{% else %}Ready to attach{% endif %}</span></div>
+        <div class="record-actions"><a class="button secondary" href="{% url 'library_quiz_editor' row.quiz.id %}?return_to={{ browse.return_to|urlencode }}">Edit quiz</a></div>
+      </article>
+    {% empty %}<p class="empty-state">{% if browse.query %}No quizzes match “{{ browse.query }}”. <a href="{% url 'library_quiz_list' %}">Clear search</a>.{% else %}No library quizzes yet. Create one to start building a reusable assessment.{% endif %}</p>{% endfor %}
+  </div>
+{% endblock %}

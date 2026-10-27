@@ -1,0 +1,27 @@
+{% extends "training/base.html" %}
+{% block title %}Slide · Employee Training{% endblock %}
+{% block content %}
+  <p><a href="{% url 'assignment_detail' assignment.id %}">← Assignment</a></p>
+  <p class="muted">{{ assignment.version.title }} · Version {{ assignment.version.version_number }} · Slide {{ slide.position }} of {{ slide_count }}</p>
+  {% if previous_acknowledged %}<p role="status">Previous slide acknowledged. Continue with this slide.</p>{% endif %}
+  <section class="card reading-panel">
+    <h1 class="plain-text">{{ slide.header }}</h1>
+    <div class="plain-text">{{ slide.body }}</div>
+    {% if slide.footer %}<hr><div class="plain-text muted">{{ slide.footer }}</div>{% endif %}
+  </section>
+  {% if assignment.version.materials.exists %}<section class="card"><h2>Supporting material</h2><ul>{% for material in assignment.version.materials.all %}<li><a href="{{ material.url }}" target="_blank" rel="noopener noreferrer">{{ material.name }}<span class="visually-hidden"> (opens in a new tab)</span></a>{% if material.description %}<p>{{ material.description }}</p>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+  {% if acknowledged %}
+    <p>You've acknowledged this slide. {{ remaining_count }} acknowledgment{{ remaining_count|pluralize }} remaining.</p>
+  {% elif assignment.is_outstanding %}
+    <p>This slide needs acknowledgment. {{ remaining_count }} acknowledgment{{ remaining_count|pluralize }} remaining.</p>
+    <form method="post" action="{% url 'acknowledge' assignment.id slide.id %}">
+      {% csrf_token %}<button type="submit">Acknowledge this slide</button>
+    </form>
+  {% else %}
+    <p>This assignment has ended. You can review its slides at any time.</p>
+  {% endif %}
+  <div class="actions">
+    {% if previous %}<a class="button secondary" href="{% url 'assignment_slide' assignment.id previous.id %}">Previous slide</a>{% endif %}
+    {% if next %}<a class="button secondary" href="{% url 'assignment_slide' assignment.id next.id %}">Next slide</a>{% endif %}
+  </div>
+{% endblock %}

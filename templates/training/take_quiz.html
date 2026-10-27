@@ -1,0 +1,49 @@
+{% extends "training/base.html" %}
+{% block title %}Quiz · Employee Training{% endblock %}
+{% block content %}
+  <p class="quiz-back"><a href="{% url 'assignment_detail' assignment.id %}">← Assignment</a></p>
+  <div class="page-heading quiz-take-heading"><div><p class="eyebrow">Knowledge check</p><h1>{{ assignment.version.title }} quiz</h1>
+    <p class="muted">Answer every question. You can retry if you do not pass.</p></div>
+    <span class="quiz-question-count">{{ questions|length }} question{{ questions|length|pluralize }}</span>
+  </div>
+  {% if errors %}
+    <div class="error" role="alert" id="quiz-errors" tabindex="-1">
+      <h2>Check your answers</h2>
+      <ul>{% for error in errors %}<li><a href="#{{ error.anchor }}">{{ error.message }}</a></li>{% endfor %}</ul>
+    </div>
+  {% endif %}
+  <form method="post" action="{% url 'submit_quiz' assignment.id %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="submission_id" value="{{ submission_id }}">
+    <div id="quiz-questions" class="quiz-take-questions" tabindex="-1">
+      {% for question in questions %}
+        <fieldset class="card quiz-take-question" id="question-{{ question.id }}" tabindex="-1"
+                  {% if question.ranked %}data-ordering{% endif %}
+                  {% if question.error %}aria-describedby="error-{{ question.id }}"{% endif %}>
+          <legend><strong class="plain-text">Question {{ question.position }}: {{ question.prompt }}</strong></legend>
+          {% if question.error %}<p class="field-error" id="error-{{ question.id }}">{{ question.error }}</p>{% endif %}
+          {% include question.take_template %}
+        </fieldset>
+      {% endfor %}
+    </div>
+    <div class="quiz-submit-bar"><p>Review your answers before submitting.</p><button type="submit">Submit answers</button></div>
+  </form>
+  {% if errors %}
+    <script>document.getElementById("quiz-errors").focus();</script>
+  {% endif %}
+  <script>
+    document.querySelectorAll("[data-ordering]").forEach((group) => {
+      const selects = [...group.querySelectorAll("select")];
+      const updateChoices = () => {
+        const chosen = new Set(selects.map((select) => select.value).filter(Boolean));
+        selects.forEach((select) => {
+          select.querySelectorAll("option").forEach((option) => {
+            option.disabled = Boolean(option.value && option.value !== select.value && chosen.has(option.value));
+          });
+        });
+      };
+      selects.forEach((select) => select.addEventListener("change", updateChoices));
+      updateChoices();
+    });
+  </script>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "training/base.html" %}
+{% block title %}Group · Employee Training{% endblock %}
+{% block content %}
+  <p><a href="{% url 'group_list' %}">← Groups</a></p>
+  <h1>{{ group.name }}</h1>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <form class="card" method="post">{% csrf_token %}
+    <label for="group-name">Group name</label><input id="group-name" name="name" value="{{ group.name }}" maxlength="200" required>
+    <button type="submit" name="action" value="rename">Rename group</button>
+  </form>
+  <form class="card" method="post">{% csrf_token %}
+    <h2>Members</h2>
+    {% for row in choices %}<label><input type="checkbox" name="employee_id" value="{{ row.employee.id }}" {% if row.selected %}checked{% endif %}>{{ row.employee.name }} ({{ row.employee.email }}){% if not row.employee.is_active %} · Inactive{% endif %}</label>{% endfor %}
+    <button type="submit" name="action" value="members">Save members</button>
+  </form>
+  <h2>Change history</h2>
+  <ul>{% for change in changes %}<li>{{ change.occurred_at }} · {{ change.actor.name }} · {{ change.get_kind_display }}{% if change.employee %}: {{ change.employee.name }}{% endif %}{% if change.old_name %}: {{ change.old_name }} → {{ change.new_name }}{% endif %}</li>{% empty %}<li>No changes.</li>{% endfor %}</ul>
+{% endblock %}

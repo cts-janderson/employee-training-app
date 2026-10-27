@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "employee-training-app"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "Django>=5.2.8,<5.3",
+  "dj-database-url>=2.3,<4",
+  "gunicorn>=23,<24",
+  "psycopg[binary]>=3.2,<4",
+  "whitenoise>=6.9,<7",
+]
+
+[tool.setuptools.packages.find]
+include = ["config*", "training*"]

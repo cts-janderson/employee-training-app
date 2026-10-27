@@ -1,0 +1,36 @@
+<section class="relay-board" aria-label="Pending assignment overview">
+  <p class="scroll-hint">On narrow windows, scroll the chart horizontally. Exact values are available below.</p>
+  <div class="relay-chart-scroll" role="region" aria-label="Pending workload chart; scroll horizontally for the full chart" tabindex="0">
+    <svg class="relay-chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 {{ chart.height }}" width="960" height="{{ chart.height }}" role="img" aria-labelledby="relay-title relay-description">
+      <style>
+        text { font-family: "Albert Sans", Arial, sans-serif; }
+        .relay-title { fill: #10222C; font-size: 25px; font-weight: 700; }
+        .relay-legend { fill: #10222C; font-size: 12px; font-weight: 500; }
+        .relay-name { fill: #10222C; font-size: 15px; font-weight: 500; }
+        .relay-segment-label { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .relay-end { fill: #10222C; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .relay-axis { fill: #5B6B74; font-size: 12px; }
+      </style>
+      <title id="relay-title">{{ chart.title }}</title>
+      <desc id="relay-description">Each training bar shows pending assignments by deadline and progress. Counts are inside the bars or in the table below.</desc>
+      <rect width="960" height="{{ chart.height }}" fill="#FFFFFF"/>
+      <text x="40" y="52" class="relay-title">{{ chart.title }}</text>
+      {% for item in chart.legend %}<rect x="{{ item.x }}" y="83" width="14" height="14" rx="2" fill="{{ item.color }}"/><text x="{{ item.x|add:21 }}" y="95" class="relay-legend">{{ item.label }}</text>{% endfor %}
+      {% for tick in chart.ticks %}<line x1="{{ tick.x }}" x2="{{ tick.x }}" y1="120" y2="{{ chart.grid_bottom }}" stroke="#E3E9ED" stroke-width="1"/><text x="{{ tick.x }}" y="{{ chart.axis_y }}" class="relay-axis" text-anchor="middle">{{ tick.value }}</text>{% endfor %}
+      {% for row in chart.rows %}
+        <g><title>{{ row.name }}: {{ row.total }} pending assignments; {{ row.overdue }} overdue</title>
+          <text x="40" y="{{ row.label_y }}" class="relay-name">{{ row.short_name }}</text>
+          {% for segment in row.segments %}<rect x="{{ segment.x }}" y="{{ row.bar_y }}" width="{{ segment.width }}" height="28" fill="{{ segment.color }}" stroke="#FFFFFF" stroke-width="1.5"/>{% if segment.text %}<text x="{{ segment.text_x }}" y="{{ row.label_y }}" class="relay-segment-label" fill="{{ segment.text_color }}" text-anchor="middle">{{ segment.text }}</text>{% endif %}{% endfor %}
+          <text x="{{ row.end_x }}" y="{{ row.label_y }}" class="relay-end">{{ row.end_label }}</text>
+        </g>
+      {% endfor %}
+    </svg>
+  </div>
+  {% if chart.total_rows > chart.rows|length %}<p class="chart-scope">Showing {{ chart.rows|length }} of {{ chart.total_rows }} trainings. View chart values for all.</p>{% endif %}
+  <details class="relay-data"><summary>View chart values</summary>
+    <p class="scroll-hint">Scroll the values table horizontally to see every column.</p>
+    <div class="table-scroll" role="region" aria-label="Pending workload chart values; scroll horizontally for all columns" tabindex="0"><table><thead><tr><th scope="col">Training</th>{% for item in chart.legend %}<th scope="col">{{ item.label }}</th>{% endfor %}<th scope="col">Assignments</th></tr></thead><tbody>
+      {% for row in chart.rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.parts.overdue_not_started }}</td><td>{{ row.parts.overdue_in_progress }}</td><td>{{ row.parts.on_time_not_started }}</td><td>{{ row.parts.on_time_in_progress }}</td><td>{{ row.total }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </details>
+</section>

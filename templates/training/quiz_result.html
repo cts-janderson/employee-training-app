@@ -1,0 +1,29 @@
+{% extends "training/base.html" %}
+{% block title %}Quiz result · Employee Training{% endblock %}
+{% block content %}
+  <p class="quiz-back"><a href="{% url 'assignment_detail' assignment.id %}">← Assignment and attempt history</a></p>
+  <div class="page-heading quiz-result-heading"><div><p class="eyebrow">Knowledge check</p><h1>{{ assignment.version.title }} quiz result</h1>
+    <p class="muted">Version {{ assignment.version.version_number }} · Due {{ assignment.due_date }} ({{ assignment.due_timezone }}) · {{ deadline }}</p></div></div>
+  <section class="card quiz-result-summary {% if attempt.passed %}quiz-passed{% else %}quiz-retry{% endif %}">
+    <div class="quiz-result-score"><span class="badge {% if attempt.passed %}success{% else %}amber{% endif %}">{% if attempt.passed %}Passed{% else %}Did not pass{% endif %}</span><strong>{{ score }}%</strong><span>{{ attempt.correct_count }} of {{ attempt.question_count }} questions correct</span></div>
+    <p class="quiz-result-date">Submitted {{ attempt.submitted_at }}</p>
+    {% if attempt.passed %}
+      <p>Your assignment is complete. <a href="{% url 'assignment_detail' assignment.id %}">Review the assignment and attempt history</a>.</p>
+    {% elif assignment.is_outstanding %}
+      <p>You can try again or <a href="{% url 'assignment_detail' assignment.id %}">review attempt history</a>.</p>
+    {% endif %}
+  </section>
+  <h2>Your submitted answers</h2>
+  <ol class="quiz-answer-review">
+    {% for row in answer_rows %}
+      <li class="card"><p class="plain-text quiz-review-prompt">{{ row.prompt }}</p>
+        {% if row.type == "ordering" %}
+          <p>Your order:</p><ol>{% for text in row.selected_texts %}<li>{{ text }}</li>{% endfor %}</ol>
+        {% elif row.type == "multiple_selection" %}
+          <p>Your selections:</p><ul>{% for text in row.selected_texts %}<li>{{ text }}</li>{% endfor %}</ul>
+        {% else %}<p>Your answer: {{ row.selected_texts.0 }}</p>{% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+  {% if not attempt.passed and assignment.is_outstanding %}<p><a class="button" href="{% url 'take_quiz' assignment.id %}">Try again</a></p>{% endif %}
+{% endblock %}

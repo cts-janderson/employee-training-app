@@ -1,0 +1,56 @@
+{% extends "training/base.html" %}
+{% block title %}My training · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><h1>My training</h1></div>
+  </div>
+  <div class="metric-grid learning-summary" aria-label="Training summary">
+    <div class="card metric"><strong>{{ unfinished|length }}</strong><span>To do</span></div>
+    <div class="card metric"><strong>{{ completed|length }}</strong><span>Completed</span></div>
+  </div>
+  <div class="section-heading"><h2>To do</h2></div>
+  {% for row in unfinished %}
+    {% if forloop.first %}
+      <section class="card feature-card" aria-labelledby="assignment-{{ row.assignment.id }}">
+        <div>
+          <span class="badge amber">{{ row.deadline }}</span>
+          <h2 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}{% if row.assignment.cycle_number > 1 %} · Renewal · cycle {{ row.assignment.cycle_number }}{% endif %}</h2>
+          <p class="meta-row"><span>Due <strong>{{ row.assignment.due_date }}</strong> ({{ row.assignment.due_timezone }})</span></p>
+          <p class="muted">{{ row.progress }}</p>
+        </div>
+        <div class="feature-action">
+          <div class="progress-label"><span>Slides acknowledged</span><span>{{ row.acknowledged_count }} of {{ row.slide_count }}</span></div>
+          <progress value="{{ row.acknowledged_count }}" max="{{ row.slide_count }}">{{ row.acknowledged_count }} of {{ row.slide_count }}</progress>
+          <a class="button" href="{{ row.next_action.url }}">{{ row.next_action.label }}</a>
+          <a href="{% url 'assignment_detail' row.assignment.id %}">Assignment details</a>
+        </div>
+      </section>
+    {% else %}
+      <section class="card training-item" aria-labelledby="assignment-{{ row.assignment.id }}">
+        <span class="badge amber">{{ row.deadline }}</span>
+        <h3 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}{% if row.assignment.cycle_number > 1 %} · Renewal · cycle {{ row.assignment.cycle_number }}{% endif %}</h3>
+        <p class="meta-row"><span>Due <strong>{{ row.assignment.due_date }}</strong> ({{ row.assignment.due_timezone }})</span><span>{{ row.progress }}</span></p>
+        <div class="progress-label"><span>Slides acknowledged</span><span>{{ row.acknowledged_count }} of {{ row.slide_count }}</span></div>
+        <progress value="{{ row.acknowledged_count }}" max="{{ row.slide_count }}">{{ row.acknowledged_count }} of {{ row.slide_count }}</progress>
+        <div class="actions"><a class="button" href="{{ row.next_action.url }}">{{ row.next_action.label }}</a><a href="{% url 'assignment_detail' row.assignment.id %}">Assignment details</a></div>
+      </section>
+    {% endif %}
+  {% empty %}<p class="empty-state">No unfinished training. New assignments will appear here.</p>{% endfor %}
+  <div class="section-heading"><h2>Completed</h2></div>
+  {% for row in completed %}
+    <section class="card training-item completed-item" aria-labelledby="assignment-{{ row.assignment.id }}">
+      <span class="badge">Completed</span>
+      <h3 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}</h3>
+      <p class="meta-row"><span>Completed <strong>{{ row.assignment.completed_at }}</strong></span>{% if row.deadline == 'Completed late' %}<span>{{ row.deadline }}</span>{% endif %}{% if row.assignment.cycle_number > 1 %}<span>Renewal {{ row.assignment.cycle_number }}</span>{% endif %}</p>
+      <a class="button secondary" href="{{ row.next_action.url }}">Review</a>
+    </section>
+  {% empty %}<p class="empty-state">No completed training yet.</p>{% endfor %}
+  {% if waived %}
+    <div class="section-heading"><h2>Waived</h2></div>
+    {% for row in waived %}<section class="card training-item" aria-labelledby="assignment-{{ row.assignment.id }}">
+      <span class="badge">Waived</span><h3 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}</h3>
+      <p>Waived {{ row.assignment.waived_at }}{% if row.assignment.cycle_number > 1 %} · Renewal {{ row.assignment.cycle_number }}{% endif %}</p>
+      <a class="button secondary" href="{% url 'assignment_detail' row.assignment.id %}">Review</a>
+    </section>{% endfor %}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "training/base.html" %}
+{% block title %}Edit quiz · Employee Training{% endblock %}
+{% block content %}
+  <p class="quiz-back">{% if library %}<a href="{{ back_url|default:'/quizzes/' }}">← Quiz library</a>{% else %}<a href="{% url 'draft_editor' version.training_id %}">← Training draft</a>{% endif %}</p>
+  <div class="page-heading quiz-editor-heading">
+    <div><p class="eyebrow">Quiz authoring</p><h1>{% if library %}Edit library quiz{% else %}Quiz for version {{ version.version_number }}{% endif %}</h1>
+      <p class="muted">{% if library %}Save unfinished questions at any time. A titled, complete quiz can be copied into a training draft; later edits to this library quiz will not change that copy.{% else %}Save unfinished questions at any time. Publish the training from its draft page when the quiz is complete.{% endif %}</p>
+    </div>
+    {% if quiz_present and not conflict %}<button type="submit" form="editor-form" name="action" value="save">Save quiz</button>{% endif %}
+  </div>
+  {% if not library and version.status == "draft" %}<p class="quiz-editor-link"><a href="{% url 'attach_library_quiz' version.training_id %}">Attach or replace with a library quiz</a></p>{% endif %}
+  {% if quiz_id %}<p class="quiz-editor-link"><a href="{% url 'quiz_learner_preview' quiz_id %}">Preview saved quiz as learner</a></p>{% endif %}
+  {% if conflict %}
+    <section class="error" role="alert" aria-labelledby="conflict-heading">
+      <h2 id="conflict-heading">{% if published_conflict %}This version was published{% elif library %}A newer library quiz was saved{% else %}A newer draft was saved{% endif %}</h2>
+      <p>Your submitted quiz changes were not saved. The server is at revision {{ version.revision }}. Compare the saved quiz below with your submitted fields.</p>
+      {% if not published_conflict %}<p>Applying your changes will replace the saved quiz content. Another save made after this page loaded will be rejected.</p>{% endif %}
+    </section>
+    <details class="card" open>
+      <summary><strong>Current saved revision {{ version.revision }}</strong></summary>
+      {% if library %}<p>Title: {{ library_quiz.title|default:"(empty)" }}</p>{% endif %}
+      <p>Passing threshold: {{ server_threshold|default:"(unset)" }}</p>
+      <ol>{% for question in server_questions %}
+        <li><strong>{{ question.prompt|default:"(no prompt)" }}</strong> · {{ question.type_label }}
+          <ol>{% for option in question.options %}<li>{{ option.text|default:"(empty)" }}{% if question.ranked %} · rank {{ option.rank|default:"(unset)" }}{% elif option.correct %} · selected as correct{% endif %}</li>{% endfor %}</ol>
+        </li>
+      {% empty %}<li>No saved questions.</li>{% endfor %}</ol>
+    </details>
+  {% endif %}
+  <p id="save-state" class="quiz-save-state" role="status">{% if saved_notice %}{{ saved_notice }}{% elif request.method == "POST" %}Unsaved changes are shown below.{% else %}Showing saved revision {{ version.revision }}.{% endif %}</p>
+  {% if errors %}
+    <div class="error" role="alert" id="quiz-editor-errors" tabindex="-1">
+      <h2>Check this quiz</h2>
+      <ul>{% for error in errors %}<li><a href="{{ error.href }}">{{ error.message }}</a></li>{% endfor %}</ul>
+    </div>
+  {% endif %}
+  {% if quiz_present %}
+    <details class="card quiz-outline">
+      <summary><strong>Quiz outline · {{ questions|length }} question{{ questions|length|pluralize }}</strong></summary>
+      <nav aria-label="Quiz outline">
+        <ol>
+          <li><a href="#passing-percent">Passing threshold</a></li>
+          {% for question in questions %}<li><a href="#question-{{ forloop.counter }}">Question {{ forloop.counter }}: {{ question.prompt|default:"Untitled question" }}</a></li>{% endfor %}
+          <li><a href="#quiz-actions">Add and save</a></li>
+        </ol>
+      </nav>
+    </details>
+    <form method="post" id="editor-form" tabindex="-1" data-unsaved="{% if request.method == 'POST' and not saved_notice %}true{% else %}false{% endif %}" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="revision" value="{{ form_revision|default:version.revision }}">
+      <div class="card quiz-settings">
+        {% if library %}<div><label for="quiz-title">Quiz title (required to attach)</label><input id="quiz-title" name="title" value="{{ title_value }}" maxlength="200" {% if title_error %}aria-invalid="true" aria-describedby="quiz-title-error"{% endif %}>{% if title_error %}<p class="field-error" id="quiz-title-error">{{ title_error }}</p>{% endif %}</div>{% endif %}
+        <div><label for="passing-percent">Passing threshold (required to publish; whole percent, 1–100)</label>
+          <input id="passing-percent" name="passing_percent" type="number" min="1" max="100" step="1" value="{{ threshold_value }}"
+                 {% if threshold_error %}aria-invalid="true" aria-describedby="threshold-error"{% endif %}>
+          <p class="quiz-field-help">A learner must meet or exceed this score to pass.</p>
+          {% if threshold_error %}<p class="field-error" id="threshold-error">{{ threshold_error }}</p>{% endif %}</div>
+      </div>
+      <div class="quiz-questions-heading"><div><h2>Questions</h2><p class="muted">{{ questions|length }} question{{ questions|length|pluralize }} · Add a format, then write the prompt and answers.</p></div></div>
+      {% if not conflict %}<div class="quiz-add-questions" aria-label="Add a question">
+        <button class="secondary" type="submit" name="action" value="add_single">Add single-choice question</button>
+        <button class="secondary" type="submit" name="action" value="add_true_false">Add true/false question</button>
+        <button class="secondary" type="submit" name="action" value="add_multiple">Add multiple-selection question</button>
+        <button class="secondary" type="submit" name="action" value="add_ordering">Add ordering question</button>
+      </div>{% endif %}
+      {% if not questions %}<p class="empty-state quiz-question-empty">{% if conflict %}No questions in these submitted changes.{% else %}No questions yet. Choose a question format above to start this quiz.{% endif %}</p>{% endif %}
+      {% for question in questions %}
+        <section class="card stack quiz-editor-question" id="question-{{ forloop.counter }}" aria-labelledby="question-heading-{{ question.id }}">
+          <div class="quiz-question-heading"><h2 id="question-heading-{{ question.id }}" tabindex="-1">Question {{ forloop.counter }}</h2><span class="badge">{{ question.type_label }}</span>{% if request.method == "GET" %}<span class="badge {% if question.ready %}status-ready{% else %}status-needs-work{% endif %}">{% if question.ready %}Ready{% else %}Needs work{% endif %}</span>{% endif %}</div>
+          <input type="hidden" name="question_id" value="{{ question.id }}">
+          <input type="hidden" name="question_type" value="{{ question.type }}">
+          <div>
+            <label for="prompt-{{ question.id }}">Prompt (required to publish)</label>
+            <textarea id="prompt-{{ question.id }}" name="question_prompt" maxlength="2000"
+                      {% if question.error %}aria-invalid="true" aria-describedby="prompt-error-{{ question.id }}"{% endif %}>{{ question.prompt }}</textarea>
+            {% if question.error %}<p class="field-error" id="prompt-error-{{ question.id }}">{{ question.error }}</p>{% endif %}
+          </div>
+          <fieldset {% if question.ranked %}data-ordering-editor{% endif %}>
+            <legend>{{ question.editor_legend }}</legend>
+            {% for option in question.options %}
+              <div class="option-row">
+                <input type="hidden" name="option_id_{{ question.id }}" value="{{ option.id }}">
+                <div class="option-answer-control">{% include question.editor_template %}</div>
+                {% if question.fixed_options %}
+                  <input type="hidden" name="option_text_{{ question.id }}" value="{{ option.text }}">
+                {% else %}
+                  <div class="option-text-field"><label for="option-{{ option.id }}">Option {{ forloop.counter }} text (required to publish)</label>
+                    <input class="option-text" id="option-{{ option.id }}" name="option_text_{{ question.id }}" value="{{ option.text }}" maxlength="500"
+                           {% if option.error %}aria-invalid="true" aria-describedby="option-error-{{ option.id }}"{% endif %}></div>
+                  {% if not conflict %}<button class="secondary option-remove" type="submit" name="action" value="review_remove_option:{{ option.id }}">Remove option</button>{% endif %}
+                {% endif %}
+                {% if option.error %}<span class="field-error option-row-error" id="option-error-{{ option.id }}">{{ option.error }}</span>{% endif %}
+              </div>
+            {% endfor %}
+            {% if question.ranked %}<p class="field-error" role="status" aria-live="polite" data-rank-warning></p>{% endif %}
+          </fieldset>
+          {% if not conflict %}
+            <div class="actions">
+              {% if not question.fixed_options %}<button class="secondary" type="submit" name="action" value="add_option:{{ question.id }}">Add option</button>{% endif %}
+              <button class="secondary" type="submit" name="action" value="up_question:{{ question.id }}" {% if forloop.first %}disabled{% endif %}>Move up</button>
+              <button class="secondary" type="submit" name="action" value="down_question:{{ question.id }}" {% if forloop.last %}disabled{% endif %}>Move down</button>
+              {% if question.alternative_type %}<button class="secondary" type="submit" name="action" value="change_type:{{ question.id }}:{{ question.alternative_type }}">Change to {{ question.alternative_label }}</button>{% endif %}
+              <button class="danger" type="submit" name="action" value="review_remove_question:{{ question.id }}">Remove question</button>
+            </div>
+            {% if question.alternative_type %}<p class="quiz-field-help">Changing type keeps these options. If several answers are selected, the first remains correct when changing to single choice.</p>{% endif %}
+          {% endif %}
+        </section>
+      {% endfor %}
+      {% if pending_remove %}
+        <section class="error" role="alert" aria-labelledby="remove-heading" id="remove-review" tabindex="-1">
+          <h2 id="remove-heading">Remove {{ pending_remove.label }}?</h2>
+          <p>This change is saved only when you confirm. Your other field edits will be saved with it.</p>
+          <div class="actions">
+            <button class="danger" type="submit" name="action" value="{{ pending_remove.action }}">Confirm removal</button>
+            <button class="secondary" type="submit" name="action" value="cancel_remove">Keep it</button>
+          </div>
+        </section>
+      {% endif %}
+      <div class="actions" id="quiz-actions" tabindex="-1">
+        {% if conflict %}
+          {% if published_conflict %}
+            <a href="{% url 'preview' version.training_id version.id %}">Review published version</a>
+          {% else %}
+            <button type="submit" name="action" value="save">Apply my quiz changes to revision {{ version.revision }}</button>
+            <a href="{% if library %}{% url 'library_quiz_editor' library_quiz.id %}{% else %}{% url 'quiz_editor' version.training_id %}{% endif %}">Discard my changes and reload saved quiz</a>
+          {% endif %}
+        {% else %}
+          <button type="submit" name="action" value="save">Save quiz</button>
+          {% if not library %}<button class="danger" type="submit" name="action" value="review_remove_quiz">Remove quiz</button>{% endif %}
+        {% endif %}
+      </div>
+    </form>
+  {% else %}
+    <form method="post" id="editor-form" tabindex="-1">{% csrf_token %}<input type="hidden" name="revision" value="{{ form_revision|default:version.revision }}"><button type="submit" name="action" value="add_quiz">Add quiz</button></form>
+  {% endif %}
+  {% include "training/unsaved_warning.html" %}
+  {% if errors %}<script>document.getElementById("quiz-editor-errors").focus();</script>{% endif %}
+  {% if pending_remove %}<script>document.getElementById("remove-review").focus();</script>{% endif %}
+  <script>
+    if (location.hash && !document.getElementById("quiz-editor-errors")) {
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target) target.focus();
+    }
+    document.querySelectorAll("[data-ordering-editor]").forEach((group) => {
+      const ranks = [...group.querySelectorAll('input[type="number"]')];
+      const warning = group.querySelector("[data-rank-warning]");
+      const update = () => {
+        const filled = ranks.map((rank) => rank.value.trim()).filter(Boolean);
+        warning.textContent = new Set(filled).size === filled.length ? "" : "Each ordering rank must be used only once.";
+      };
+      ranks.forEach((rank) => rank.addEventListener("input", update));
+      update();
+    });
+  </script>
+{% endblock %}

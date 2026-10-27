@@ -1,0 +1,11 @@
+<p>Choose each option once, in the order it should appear.</p>
+{% for position in question.positions %}
+  <label for="order-{{ question.id }}-{{ position.number }}">Position {{ position.number }} for question {{ question.position }}</label>
+  <select id="order-{{ question.id }}-{{ position.number }}" name="{{ question.field_name }}"
+          {% if question.error %}aria-invalid="true" aria-describedby="error-{{ question.id }}"{% endif %}>
+    <option value="">Choose an option</option>
+    {% for option in question.options %}
+      <option value="{{ option.value }}" {% if position.selected == option.value %}selected{% endif %}>{{ option.text }}</option>
+    {% endfor %}
+  </select>
+{% endfor %}

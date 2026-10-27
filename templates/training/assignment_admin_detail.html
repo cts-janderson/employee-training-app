@@ -1,0 +1,114 @@
+{% extends "training/base.html" %}
+{% load tz %}
+{% block title %}Assignment detail · Employee Training{% endblock %}
+{% block content %}
+  <p><a href="{{ back_url|default:'/assignments/' }}">← Assignments</a></p>
+  <h1>{{ assignment.version.title }}</h1>
+  {% if archived %}<section class="card" role="status"><h2>Assignment archived</h2><p>Archived {{ assignment.archived_at }}. Its evidence is preserved. Restoring visibility does not restart a canceled obligation.</p><form method="post" action="{% url 'restore_assignment' assignment.id %}">{% csrf_token %}<button type="submit">Restore to routine lists</button></form></section>{% endif %}
+  <section class="card">
+    <p><strong>{{ assignment.employee.name }}</strong> ({{ assignment.employee.email }}) · {% if assignment.employee.is_active %}Active employee{% else %}Inactive employee{% endif %}</p>
+    <p>Version {{ assignment.version.version_number }} · Cycle {{ assignment.cycle_number }} · {{ state }} · {{ progress }} · Deadline: {{ deadline }}</p>
+    {% if assignment.renews %}<p>Renews <a href="{% url 'assignment_admin_detail' assignment.renews.id %}">cycle {{ assignment.renews.cycle_number }}</a>.</p>{% endif %}
+    {% for renewal in assignment.renewals.all %}<p>Renewed by <a href="{% url 'assignment_admin_detail' renewal.id %}">cycle {{ renewal.cycle_number }}</a>.</p>{% endfor %}
+    <p>Assigned {{ assignment.assigned_at }} · Due {{ assignment.due_date }} ({{ assignment.due_timezone }}) · Deadline revision {{ assignment.due_revision }}</p>
+    {% if assignment.started_at %}<p>First started {{ assignment.started_at }}</p>{% endif %}
+    {% if assignment.completed_at %}<p>Completed {{ assignment.completed_at }}</p>{% endif %}
+    {% if assignment.canceled_at %}<p>Canceled {{ assignment.canceled_at }}</p>{% endif %}
+    {% if assignment.waived_at %}<p>Waived {{ assignment.waived_at }}</p>{% endif %}
+  </section>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <section class="card">
+    <h2>Manual reminder</h2>
+    {% if manual_can_send %}
+      <form method="post" action="{% url 'send_manual_nudge' assignment.id %}">{% csrf_token %}<button type="submit">Send reminder</button></form>
+      <p class="muted">This queues a delivery request; open its notification record to see the outcome.</p>
+    {% elif manual_next_at %}
+      <p>Rate limited. Next eligible manual reminder: {% timezone org_time_zone %}{{ manual_next_at }}{% endtimezone %} ({{ org_time_zone }}).</p>
+    {% else %}<p>Manual reminders are available for active employees with incomplete, pending assignments.</p>{% endif %}
+    {% with next_reminder=upcoming_reminders.0 %}
+      <p>Next scheduled reminder: {% if next_reminder %}{{ next_reminder.get_kind_display }} at {% timezone org_time_zone %}{{ next_reminder.scheduled_at }}{% endtimezone %} ({{ org_time_zone }}){% else %}None{% endif %}.</p>
+    {% endwith %}
+  </section>
+  {% if is_pending %}
+    <div class="filter-grid">
+      <form class="card stack" method="post" action="{% url 'change_deadline' assignment.id %}">
+        {% csrf_token %}
+        <h2>Change deadline</h2>
+        <div><label for="due-date">New due date ({{ org_time_zone }})</label><input id="due-date" name="due_date" type="date" value="{{ assignment.due_date|date:'Y-m-d' }}" required></div>
+        <p class="muted">Saving the same date leaves the deadline and history unchanged.</p>
+        <div><button type="submit">Save deadline</button></div>
+      </form>
+      <form class="card stack" method="post" action="{% url 'cancel_assignment' assignment.id %}">
+        {% csrf_token %}
+        <h2>Cancel assignment</h2>
+        <div><label for="cancel-reason">Reason</label><textarea id="cancel-reason" name="reason" maxlength="1000" required></textarea></div>
+        <div><button class="danger" type="submit">Cancel assignment</button></div>
+      </form>
+      {% if assignment.employee_id != request.employee.id %}<form class="card stack" method="post" action="{% url 'waive_assignment' assignment.id %}">
+        {% csrf_token %}<h2>Waive assignment</h2>
+        <p>This waiver ends the requirement and cannot be revoked. The activity already recorded stays available.</p>
+        <div><label for="waiver-reason">Reason</label><textarea id="waiver-reason" name="reason" maxlength="1000" required></textarea></div>
+        <div><button class="danger" type="submit">Confirm waiver</button></div>
+      </form>{% endif %}
+    </div>
+  {% elif assignment.canceled_at %}
+    <p><a class="button secondary" href="{% url 'assign_training' assignment.training_id %}">Assign a replacement</a> <span class="muted">Select its version and deadline separately. Existing evidence stays here.</span></p>
+  {% endif %}
+  {% if not archived %}<form class="card stack" method="post" action="{% url 'archive_assignment' assignment.id %}">
+    {% csrf_token %}
+    <h2>{% if is_pending %}Cancel and archive assignment{% else %}Archive assignment{% endif %}</h2>
+    <p>{% if is_pending %}This ends the unfinished obligation, stops future reminders, and frees the training for replacement.{% else %}This hides the assignment from routine lists.{% endif %} Its progress, attempts, and notification history remain available here and in the archive.</p>
+    <div><label for="archive-reason">Reason</label><textarea id="archive-reason" name="reason" maxlength="1000" required></textarea></div>
+    <div><button class="danger" type="submit">{% if is_pending %}Confirm cancel and archive{% else %}Confirm archive{% endif %}</button></div>
+  </form>{% endif %}
+  <details class="card"><summary><strong>Slide acknowledgments · {{ slide_rows|length }} slides</strong></summary>
+  <h2>Slide evidence</h2>
+  <ol>{% for row in slide_rows %}<li class="card"><strong>{{ row.slide.header }}</strong> — {% if row.entry %}Acknowledged {{ row.entry.acknowledged_at }}{% else %}Not acknowledged{% endif %}</li>{% endfor %}</ol>
+  </details>
+  <details class="card"><summary><strong>Quiz attempts · {{ attempts|length }}</strong></summary>
+  <h2>Quiz attempts</h2>
+  {% if quiz %}
+    {% for row in attempts %}
+      <section class="card">
+        <h3>Attempt {{ forloop.counter }} · {{ row.attempt.submitted_at }}</h3>
+        <p>{{ row.score }}% · {{ row.attempt.correct_count }} of {{ row.attempt.question_count }} correct · {% if row.attempt.passed %}Passed{% else %}Did not pass{% endif %}</p>
+        <details><summary>Submitted answers</summary>
+          <ol>{% for answer in row.answers %}
+            <li><p>{{ answer.prompt }}</p>
+              {% if answer.type == "ordering" %}<ol>{% for text in answer.selected_texts %}<li>{{ text }}</li>{% endfor %}</ol>
+              {% elif answer.type == "multiple_selection" %}<ul>{% for text in answer.selected_texts %}<li>{{ text }}</li>{% endfor %}</ul>
+              {% else %}<p>{{ answer.selected_texts.0 }}</p>{% endif %}
+            </li>
+          {% endfor %}</ol>
+        </details>
+      </section>
+    {% empty %}<p>No quiz attempts yet.</p>{% endfor %}
+  {% else %}<p>Not applicable — this version has no quiz.</p>{% endif %}
+  </details>
+  <details class="card"><summary><strong>Assignment history</strong></summary>
+  <h2>Assignment history</h2>
+  {% for event in history %}
+    <section class="card">
+      <h3>{{ event.get_kind_display }} · {{ event.occurred_at }}</h3>
+      <p>By {{ event.actor.name }}</p>
+      {% if event.kind == "deadline_changed" %}
+        <p>{{ event.old_due_date }} ({{ event.old_due_timezone }}) → {{ event.new_due_date }} ({{ event.new_due_timezone }})</p>
+        <p>Deadline revision {{ event.old_due_revision }} → {{ event.new_due_revision }}</p>
+      {% elif event.kind == "canceled" %}<p>Reason: {{ event.reason }}</p>
+      {% elif event.kind == "waived" %}<p>Waived {{ event.new_waived_at }} by {{ event.actor.name }}: {{ event.reason }}</p>
+      {% elif event.kind == "archived" %}<p>Archived {{ event.new_archived_at }}. Reason: {{ event.reason }}</p>
+      {% elif event.kind == "restored" %}<p>Restored from archive. Previous archive time: {{ event.old_archived_at }}</p>{% endif %}
+    </section>
+  {% empty %}<p>No changes recorded.</p>{% endfor %}
+  </details>
+  <details class="card"><summary><strong>Notification history · {{ notifications|length }}</strong></summary>
+  <h2>Upcoming reminders</h2>
+  {% for notification in upcoming_reminders %}
+    <p><a href="{% url 'notification_detail' notification.id %}">{{ notification.get_kind_display }}</a> · Scheduled {{ notification.scheduled_at }} · {{ notification.get_status_display }}</p>
+  {% empty %}<p>No future reminders are scheduled.</p>{% endfor %}
+  <h2>Notification history</h2>
+  {% for notification in notifications %}
+    <p><a href="{% url 'notification_detail' notification.id %}">{{ notification.get_kind_display }}</a> · Revision {{ notification.due_revision }}{% if notification.scheduled_at %} · Scheduled {{ notification.scheduled_at }}{% endif %}{% if notification.requested_by %} · Requested by {{ notification.requested_by.name }} at {{ notification.requested_at }}{% endif %} · {{ notification.get_status_display }}{% if notification.suppression_reason %} ({{ notification.suppression_reason }}){% endif %}</p>
+  {% empty %}<p>No notification intents recorded for this assignment.</p>{% endfor %}
+  </details>
+{% endblock %}

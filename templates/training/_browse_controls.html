@@ -1,0 +1,16 @@
+<div class="browse-controls">
+  <form method="get" role="search">
+    <label for="browse-query">Search {{ browse_label }}</label>
+    <input id="browse-query" name="q" type="search" value="{{ browse.query }}" maxlength="200">
+    {% for key, value in browse.params.items %}{% if key != "q" %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
+    <button type="submit">Search</button>
+  </form>
+  {% if browse.page.paginator.num_pages > 1 %}
+    <p aria-live="polite">Showing {{ browse.page.start_index }}–{{ browse.page.end_index }} of {{ browse.total }} {{ browse_label }}</p>
+    <nav aria-label="Pagination">
+      {% if browse.previous_url %}<a href="{{ browse.previous_url }}">Previous</a>{% endif %}
+      <span aria-current="page">Page {{ browse.page.number }} of {{ browse.page.paginator.num_pages }}</span>
+      {% if browse.next_url %}<a href="{{ browse.next_url }}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+</div>

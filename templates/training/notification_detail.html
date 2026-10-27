@@ -1,0 +1,53 @@
+{% extends "training/base.html" %}
+{% block title %}Notification detail · Employee Training{% endblock %}
+{% block content %}
+  <p><a href="{% url 'notification_log' %}">← Notification log</a></p>
+  <h1>{{ notification.get_kind_display }}</h1>
+  <section class="card">
+    <h2>{{ outcome }}</h2>
+    <p>{{ next_step }}</p>
+    <p><a href="{% url 'assignment_admin_detail' notification.assignment.id %}">{{ notification.assignment.version.title }} · {{ notification.assignment.employee.name }}</a></p>
+    <p>Status: <strong>{{ outcome }}</strong> since {{ notification.status_changed_at }}</p>
+    {% if notification.requested_by %}<p>Requested by {{ notification.requested_by.name }} at {{ notification.requested_at }}</p>{% endif %}
+    {% if notification.scheduled_at %}<p>Scheduled {{ notification.scheduled_at }}</p>{% endif %}
+    {% if notification.sent_at %}<p>Accepted or confirmed delivered {{ notification.sent_at }}</p>{% endif %}
+    {% if notification.suppression_reason %}<p>Suppression: {{ notification.suppression_reason }}</p>{% endif %}
+    {% if notification.last_error_code %}<p>Last error code: {{ notification.last_error_code }}</p>{% endif %}
+    <details><summary>Delivery metadata</summary><p>Stored status: {{ notification.status }} · Deadline revision {{ notification.due_revision }} · Created {{ notification.created_at }}</p>
+      {% if notification.provider_reference %}<p>Provider reference: {{ notification.provider_reference }}</p>{% endif %}
+      <p>Notification ID {{ notification.id }}</p>
+    </details>
+  </section>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {% if notification.status == "blocked" or notification.status == "exhausted" %}
+    <form method="post" action="{% url 'retry_notification' notification.id %}">{% csrf_token %}<button type="submit">Retry through worker</button></form>
+  {% elif notification.status == "ambiguous" %}
+    <form class="card stack" method="post" action="{% url 'reconcile_notification' notification.id %}">
+      {% csrf_token %}
+      <h2>Reconcile outcome</h2>
+      <p>Check the delivery sink or provider record before choosing. A new dispatch follows only after confirming no delivery.</p>
+      <label for="decision">Decision</label><select id="decision" name="decision" required>
+        <option value="">Choose</option><option value="delivered">Confirmed delivered</option><option value="not_delivered">Confirmed not delivered</option>
+      </select>
+      <label for="reason">Evidence or reason</label><textarea id="reason" name="reason" maxlength="1000" required></textarea>
+      <div><button type="submit">Record reconciliation</button></div>
+    </form>
+  {% endif %}
+  <h2>Delivery attempts</h2>
+  {% for attempt in notification.delivery_attempts.all %}
+    <section class="card">
+      <h3>Attempt {{ attempt.number }} · {{ attempt.get_outcome_display }}</h3>
+      <p>{{ attempt.started_at }} · Recipient {{ attempt.recipient_email }} · Deadline revision {{ attempt.due_revision }}</p>
+      <p>Due {{ attempt.due_date }} ({{ attempt.due_timezone }})</p>
+      <p>Delivery key {{ attempt.delivery_key }}{% if attempt.provider_reference %} · Reference {{ attempt.provider_reference }}{% endif %}</p>
+      {% if attempt.error_code %}<p>Error code: {{ attempt.error_code }}</p>{% endif %}
+      <p><strong>Subject:</strong> {{ attempt.subject }}</p><pre class="plain-text">{{ attempt.body }}</pre>
+    </section>
+  {% empty %}<p>No dispatch attempt yet.</p>{% endfor %}
+  {% if notification.reconciliations.all %}
+    <h2>Reconciliation history</h2>
+    {% for entry in notification.reconciliations.all %}
+      <section class="card"><p>{{ entry.get_decision_display }} · {{ entry.decided_at }} · {{ entry.actor.name }}</p><p>{{ entry.reason }}</p></section>
+    {% endfor %}
+  {% endif %}
+{% endblock %}

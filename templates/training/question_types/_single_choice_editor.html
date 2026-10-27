@@ -1,0 +1,1 @@
+<label class="option-label"><input class="option-check" type="radio" name="correct_{{ question.id }}" value="{{ option.id }}" {% if option.correct %}checked{% endif %}> {% if question.fixed_options %}{{ option.text }} is correct{% else %}Option {{ forloop.counter }} is correct{% endif %}</label>

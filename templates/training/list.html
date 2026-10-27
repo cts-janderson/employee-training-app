@@ -1,0 +1,47 @@
+{% extends "training/base.html" %}
+{% block title %}Trainings · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><p class="eyebrow">Manage learning</p><h1>Trainings</h1><p class="muted">Create, revise, and assign training. Use synthetic content only in this local workspace.</p></div>
+    <form method="post" action="{% url 'new_training' %}">{% csrf_token %}<button type="submit">Create training</button></form>
+  </div>
+  <div class="section-heading"><h2>Training library</h2><span class="section-count">{{ browse.total }} training{{ browse.total|pluralize }}</span></div>
+  <nav class="library-filters" aria-label="Filter trainings">
+    <a href="?q={{ browse.query|urlencode }}" {% if not status_filter %}aria-current="page"{% endif %}>All</a>
+    <a href="?status=draft&amp;q={{ browse.query|urlencode }}" {% if status_filter == "draft" %}aria-current="page"{% endif %}>Has draft</a>
+    <a href="?status=published&amp;q={{ browse.query|urlencode }}" {% if status_filter == "published" %}aria-current="page"{% endif %}>Published</a>
+  </nav>
+  {% with browse_label="trainings" %}{% include "training/_browse_controls.html" %}{% endwith %}
+  <div class="collection-panel training-library" aria-label="Training library results">
+    {% if rows %}<div class="training-library-header" aria-hidden="true"><span>Training</span><span>Versions</span><span>Actions</span></div>{% endif %}
+    {% for row in rows %}
+      <article class="collection-row training-library-row" aria-labelledby="training-{{ row.training.id }}">
+        <div class="training-library-identity">
+          <div class="record-icon" aria-hidden="true">T</div>
+          <div class="record-main">
+            <h3 id="training-{{ row.training.id }}">{{ row.display_title }}</h3>
+            {% if row.draft_title %}<p class="record-subtitle">Draft title: {{ row.draft_title }}</p>{% elif row.display_description %}<p class="record-subtitle">{{ row.display_description|truncatechars:110 }}</p>{% endif %}
+          </div>
+        </div>
+        <div class="training-library-versions">
+          <div class="training-library-badges">
+            {% if row.latest %}<span class="badge success">Published v{{ row.latest.version_number }}</span>{% endif %}
+            {% if row.draft %}<span class="badge amber">Draft v{{ row.draft.version_number }}</span>{% endif %}
+          </div>
+          {% if row.published %}
+            <details class="record-details training-library-history"><summary>Version history</summary>
+              <ul>{% for version in row.published %}<li><a href="{% url 'preview' row.training.id version.id %}">Version {{ version.version_number }}: {{ version.title|default:"Untitled training" }}</a></li>{% endfor %}</ul>
+            </details>
+          {% endif %}
+        </div>
+        <div class="training-library-actions">
+          {% if row.draft %}<a class="button" href="{% url 'draft_editor' row.training.id %}?return_to={{ browse.return_to|urlencode }}">Edit draft</a>{% else %}<form method="post" action="{% url 'new_revision' row.training.id %}">{% csrf_token %}<button type="submit">Start revision</button></form>{% endif %}
+          {% if row.published %}<div class="training-library-action-links">
+            <a class="text-action" href="{% url 'assign_training' row.training.id %}">Assign training</a>
+            {% if row.training.renewal_interval_months %}<a class="text-action" href="{% url 'renew_training' row.training.id %}">Review renewals</a>{% endif %}
+          </div>{% endif %}
+        </div>
+      </article>
+    {% empty %}<p class="empty-state">{% if browse.query or status_filter %}No trainings match this search or filter. <a href="{% url 'training_list' %}">Clear search and filters</a>.{% else %}No trainings yet. Create one to start building the library.{% endif %}</p>{% endfor %}
+  </div>
+{% endblock %}

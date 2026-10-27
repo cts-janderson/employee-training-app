@@ -1,0 +1,74 @@
+{% extends "training/base.html" %}
+{% block title %}Notifications · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading notification-heading">
+    <div>
+      <p class="eyebrow">Delivery activity</p>
+      <h1>Notifications</h1>
+      <p class="muted">Track training messages, review delivery outcomes, and follow up when a message needs attention.</p>
+    </div>
+  </div>
+
+  <section class="notification-overview" aria-label="Delivery overview">
+    <div class="notification-stat"><span>All notifications</span><strong>{{ counts.total }}</strong><small>Recorded delivery intents</small></div>
+    <div class="notification-stat queued"><span>Queued</span><strong>{{ counts.queued }}</strong><small>Pending or sending</small></div>
+    <div class="notification-stat sent"><span>Sent</span><strong>{{ counts.sent }}</strong><small>Accepted or confirmed</small></div>
+    <div class="notification-stat attention"><span>Needs attention</span><strong>{{ counts.attention }}</strong><small>Retry or intervention</small></div>
+  </section>
+
+  <form class="card notification-filters" method="get" role="search" aria-label="Filter notifications">
+    <div class="notification-filter-field">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        <option value="all" {% if selected_status == "all" %}selected{% endif %}>All statuses</option>
+        {% for value,label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="notification-filter-field">
+      <label for="kind">Message type</label>
+      <select id="kind" name="kind">
+        <option value="all" {% if selected_kind == "all" %}selected{% endif %}>All message types</option>
+        {% for value,label in kind_choices %}<option value="{{ value }}" {% if selected_kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="notification-filter-field notification-search">
+      <label for="q">Employee or training</label>
+      <input id="q" type="search" name="q" value="{{ search }}" maxlength="100" placeholder="Search by name or training">
+    </div>
+    <div class="notification-filter-actions">
+      <button type="submit">Apply</button>
+      {% if selected_status != "all" or selected_kind != "all" or search %}<a href="{% url 'notification_log' %}">Clear</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="section-heading notification-list-heading">
+    <h2>Notification log</h2>
+    <span class="section-count">{{ notification_rows|length }} result{{ notification_rows|length|pluralize }}</span>
+  </div>
+  <div class="notification-list" aria-label="Notification log">
+    <div class="notification-list-header" aria-hidden="true">
+      <span>Message type</span><span>Employee</span><span>Training</span><span>Timing</span><span>Status</span><span>Attempts</span><span>Details</span>
+    </div>
+    {% for row in notification_rows %}
+      <article class="notification-list-row" aria-labelledby="notification-{{ row.item.id }}">
+        <div class="notification-kind">
+          <span class="notification-kind-icon" aria-hidden="true">✉</span>
+          <div><h3 id="notification-{{ row.item.id }}">{{ row.item.get_kind_display }}</h3><small>Training email</small></div>
+        </div>
+        <div class="notification-cell notification-person"><span class="notification-mobile-label">Employee</span><strong>{{ row.item.assignment.employee.name }}</strong></div>
+        <div class="notification-cell notification-training"><span class="notification-mobile-label">Training</span>{{ row.item.assignment.version.title }}</div>
+        <div class="notification-cell notification-timing"><span class="notification-mobile-label">Timing</span>
+          {% if row.item.status == "retry" and row.item.next_attempt_at %}<strong>Retry {{ row.item.next_attempt_at|date:"M j, Y · g:i A" }}</strong>
+          {% elif row.item.scheduled_at %}<strong>{{ row.item.scheduled_at|date:"M j, Y · g:i A" }}</strong>
+          {% else %}<strong>{{ row.item.created_at|date:"M j, Y · g:i A" }}</strong>{% endif %}
+          <small>Created {{ row.item.created_at|date:"M j, Y · g:i A" }}</small>
+        </div>
+        <div class="notification-cell notification-status"><span class="notification-mobile-label">Status</span><span class="notification-pill {{ row.tone }}">{{ row.outcome }}</span></div>
+        <div class="notification-cell notification-attempts"><span class="notification-mobile-label">Attempts</span>{{ row.item.attempt_count }}</div>
+        <a class="notification-detail-link" href="{% url 'notification_detail' row.item.id %}" aria-label="View {{ row.item.get_kind_display }} for {{ row.item.assignment.employee.name }}">View <span aria-hidden="true">→</span></a>
+      </article>
+    {% empty %}
+      <div class="notification-empty"><strong>No notifications found</strong><p>Try a different status, message type, or search term.</p><a href="{% url 'notification_log' %}">Clear filters</a></div>
+    {% endfor %}
+  </div>
+{% endblock %}

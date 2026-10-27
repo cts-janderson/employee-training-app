@@ -1,0 +1,30 @@
+{% extends "training/base.html" %}
+{% block title %}Preview · Employee Training{% endblock %}
+{% block content %}
+  <p><a href="{% url 'training_list' %}">← Trainings</a></p>
+  <h1>{{ version.title|default:"Untitled training" }}</h1>
+  <p class="muted">Version {{ version.version_number }} · {{ version.get_status_display }}</p>
+  {% if version.status == "draft" %}<p><a class="button" href="{% url 'draft_editor' version.training_id %}">Back to editor</a></p>{% endif %}
+  {% if version.status == "published" %}<section class="card" role="status"><h2>Version {{ version.version_number }} published</h2><p>This version is immutable. Publishing did not assign it to employees.</p><a class="button" href="{% url 'assign_training' version.training_id %}?version_id={{ version.id }}">Assign training</a></section>{% endif %}
+  {% if version.description %}<div class="plain-text card">{{ version.description }}</div>{% endif %}
+  {% for slide in slides %}
+    <section class="card reading-panel">
+      <p class="muted">Slide {{ slide.position }}</p>
+      <h2 class="plain-text">{{ slide.header }}</h2>
+      <div class="plain-text">{{ slide.body }}</div>
+      {% if slide.footer %}<hr><div class="plain-text muted">{{ slide.footer }}</div>{% endif %}
+    </section>
+  {% empty %}
+    <p>No slides yet.</p>
+  {% endfor %}
+  {% if version.materials.exists %}<section class="card"><h2>Supporting material</h2><ul>{% for material in version.materials.all %}<li>{% if version.status == "published" %}<a href="{{ material.url }}" target="_blank" rel="noopener noreferrer">{{ material.name }}<span class="visually-hidden"> (opens in a new tab)</span></a>{% else %}{{ material.name|default:"Untitled material" }} · {{ material.url|default:"No link" }}{% endif %}{% if material.description %}<p>{{ material.description }}</p>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+  {% if quiz %}
+    <h2>Quiz preview</h2>
+    <p>Passing threshold: {{ quiz.passing_percent|default_if_none:"Not set" }}%</p>
+    {% for question in quiz.questions.all %}
+      <section class="card"><h3>Question {{ question.position }} · {{ question.get_type_display }}</h3><p class="plain-text">{{ question.prompt }}</p>
+        <ul>{% for option in question.options.all %}<li>{{ option.text }}{% if option.is_correct %} — correct{% endif %}{% if option.required_rank %} — required rank {{ option.required_rank }}{% endif %}</li>{% endfor %}</ul>
+      </section>
+    {% endfor %}
+  {% endif %}
+{% endblock %}
