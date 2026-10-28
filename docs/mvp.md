@@ -4,6 +4,8 @@
 **Status:** Confirmed MVP requirements baseline  
 **Date:** October 26, 2026  
 
+> **Authentication update, October 28, 2026:** The [email and password authentication plan](plans/email-password-authentication.md) supersedes the provider-managed sign-in, provider account-binding, and no-self-registration requirements below. The new direction allows employee registration subject to administrator approval and administrator-created employee records. Implementation is deferred.
+
 ## 1. Executive Summary
 
 This document consolidates the initial user stories, sketches, and data-model brainstorming for an internal employee training management application. The system enables administrators to create and assign training, establish deadlines, track completion, and send reminders. Employees can review assigned material, complete quizzes, and monitor their progress.

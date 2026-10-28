@@ -61,11 +61,22 @@ Scheduled reminders use 09:00 in `ORG_TIME_ZONE` (default `America/New_York`), t
 
 ## Checks and static assets
 
-With PostgreSQL configured as above:
+With PostgreSQL running, run all local checks using:
+
+```bash
+./scripts/test-local.sh
+```
+
+The script uses `postgresql://localhost:5432/employee_training` unless you export a different `DATABASE_URL`. It requires PostgreSQL so the concurrency tests run, sets the local demo environment, and stops at the first failed command. It checks Django configuration and missing migrations, runs the full test suite with verbose output, and builds static assets. A successful run ends with `All checks passed.`
+
+Django creates and removes a separate test database (`test_employee_training` with the default connection), so your PostgreSQL account needs permission to create databases. The script does not apply migrations to your development database.
+
+To run the checks separately with the database and demo environment configured as above:
 
 ```bash
 .venv/bin/python manage.py check
-.venv/bin/python manage.py test
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py test --verbosity 2
 .venv/bin/python manage.py collectstatic --noinput
 ```
 

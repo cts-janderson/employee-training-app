@@ -29,11 +29,17 @@ The seed adds six synthetic learners, two groups, published trainings, a draft, 
 
 For setup variations, configuration, the notification worker, and checks, see [local development](docs/local-development.md).
 
+With PostgreSQL running, run configuration and migration checks, the full test suite (including concurrency tests), and the static asset build:
+
+```bash
+./scripts/test-local.sh
+```
+
 ## Current scope and rollout status
 
 - **Implemented locally:** versioned authoring; slide acknowledgment; quiz grading and retries; individual and group assignment; administrator reports and CSV export; renewal review; assignment cancellation, archiving, and waiver; durable notification intents, scheduled reminders, and audited manual nudges.
 - **Development integrations:** a loopback-only demo actor switcher stands in for sign-in. The notification worker uses Django's in-memory email sink and synthetic `.test` addresses; it does not send external email.
-- **Before real use:** connect Microsoft Entra ID sign-in and an approved email provider, prove deployment and worker operation, verify PostgreSQL migrations and concurrency, and complete the operational owner and employee-data retention/access approvals in the [MVP release criteria](docs/implementation-plan.md#mvp-release-criteria). Keep real employee data out until those gates are met.
+- **Before real use:** implement [email and password authentication with enrollment approval](docs/plans/email-password-authentication.md) and connect an approved email provider, prove deployment and worker operation, verify PostgreSQL migrations and concurrency, and complete the operational owner and employee-data retention/access approvals in the [MVP release criteria](docs/implementation-plan.md#mvp-release-criteria). Keep real employee data out until those gates are met.
 
 The [MVP requirements](docs/mvp.md) define confirmed stories `US-01`–`US-12`. [Extended stories](docs/user-stories.md) record locally implemented additions beyond that baseline. Local implementation does not by itself complete the release criteria.
 
@@ -44,6 +50,7 @@ The [MVP requirements](docs/mvp.md) define confirmed stories `US-01`–`US-12`. 
 | [Local development](docs/local-development.md) | Environment, database, worker, tests, and static assets |
 | [Demo guide](docs/demo-guide.md) | Seed data and administrator-to-learner walkthrough |
 | [User stories](docs/user-stories.md) | Confirmed MVP and proposed extension stories |
+| [Authentication plan](docs/plans/email-password-authentication.md) | Deferred email/password sign-in, self-registration with approval, and administrator-created employees |
 | [MVP requirements](docs/mvp.md) and [implementation plan](docs/implementation-plan.md) | Product behavior, delivery slices, and release gates |
 | [Glossary](docs/GLOSSARY.md) and [architecture decisions](docs/adr/) | Domain terms and consequential design choices |
 | [HCI review](docs/hci-review.md), [implementation plan](docs/hci-implementation-plan.md), and [validation](docs/hci-validation.md) | Interface findings, changes, and remaining human review |

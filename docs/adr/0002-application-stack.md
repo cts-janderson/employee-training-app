@@ -1,5 +1,7 @@
 # Application stack for the MVP
 
+> **Authentication superseded, October 28, 2026:** Follow the [email and password authentication plan](../plans/email-password-authentication.md) instead of the Entra sign-in and account-binding direction below. The other stack decisions remain applicable.
+
 Use Django 5.2 LTS with server-rendered pages, PostgreSQL, and a database-backed worker in the same codebase. Run the finished internal tool on an organization-controlled machine or VM that employees can reach over the internal network or VPN. Django's migrations, transactions, forms, and session handling suit the eight vertical slices without a separate frontend service. PostgreSQL can enforce the uniqueness and transactional rules for versions, assignments, and delivery work. A database-backed worker avoids an additional queue service.
 
 The organization uses Microsoft Entra ID for employee accounts. Keep authentication as a development stub while building core workflows; choose and implement the final Entra account-binding procedure before real employee use. Likewise, use a local email sink while building notification behavior, then connect an organization mail relay or another provider before live use. Provider credentials, the application URL, and sender details remain runtime configuration.

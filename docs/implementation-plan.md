@@ -4,6 +4,8 @@
 **Status:** Confirmed implementation baseline  
 **Date:** October 26, 2026
 
+> **Authentication update, October 28, 2026:** The [email and password authentication plan](plans/email-password-authentication.md) supersedes the Entra/provider sign-in, provider account-binding, and no-self-registration steps below. Implement employee registration subject to administrator approval and administrator-created employee records instead. Authentication remains deferred; existing release gates still apply.
+
 Deliver the MVP through eight vertical slices. Each slice includes the interface, server behavior, persistence, authorization, and verification needed for a usable workflow. The local authoring, assignment, quiz, monitoring, and notification flows now exist, including scheduled reminders and manual nudges. The [stack decision](adr/0002-application-stack.md) is recorded; organizational constraints and deployment proof remain open setup gates below.
 
 For local development, core workflows may use a loopback-only synthetic administrator and an email sink while the Entra sign-in and outbound-email integrations are deferred. Stub behavior does not satisfy the authentication, notification, or deployment acceptance criteria below. Keep all real employee data and live use behind those release gates.
