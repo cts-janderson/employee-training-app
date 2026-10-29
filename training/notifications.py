@@ -1,3 +1,4 @@
+import logging
 import uuid
 import re
 from dataclasses import dataclass
@@ -16,6 +17,9 @@ from .models import (
     Assignment, EmployeeActivityChange, Notification, NotificationDeliveryAttempt,
     NotificationReconciliation,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationError(Exception):
@@ -461,6 +465,7 @@ def process_ready_notifications(*, limit=100, now=None, sender=None, should_stop
             processed.append(dispatch_claimed(*claim, now=current, sender=sender))
         except NotificationError:
             # Another worker recovered this claim; it's already recorded for reconciliation.
+            logger.warning("Notification %s was recovered by another worker before dispatch finished", claim[0])
             continue
     return processed
 

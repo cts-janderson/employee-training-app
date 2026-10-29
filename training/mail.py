@@ -70,7 +70,7 @@ def _retry_after(headers, now=None):
     value = headers.get("retry-after", "").strip()
     if not value:
         return None
-    if value.isdigit():
+    if value.isascii() and value.isdigit():
         return int(value)
     try:
         moment = parsedate_to_datetime(value)

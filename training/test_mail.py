@@ -176,6 +176,7 @@ class RetryAfterParsingTests(SimpleTestCase):
         self.assertEqual(_retry_after({"retry-after": "Thu, 29 Oct 2026 14:00:00 GMT"}, now), 7200)
         self.assertEqual(_retry_after({"retry-after": "Thu, 29 Oct 2026 11:00:00 GMT"}, now), 0)
         self.assertIsNone(_retry_after({"retry-after": "soon"}, now))
+        self.assertIsNone(_retry_after({"retry-after": "\u00b2"}, now))
         self.assertIsNone(_retry_after({}, now))
 
 
@@ -197,6 +198,11 @@ class FailingBackend:
         raise TransientMailError("graph_unreachable")
 
 
+class AmbiguousBackend(FailingBackend):
+    def send_messages(self, messages):
+        raise AmbiguousMailError("graph_no_answer")
+
+
 @override_settings(EMAIL_BACKEND="training.test_mail.FailingBackend")
 class AccountEmailFailureTests(TestCase):
     def test_failed_send_keeps_the_earlier_link_working(self):
@@ -208,6 +214,15 @@ class AccountEmailFailureTests(TestCase):
         employee.refresh_from_db()
         self.assertEqual(employee.link_generation, 0)
         self.assertTrue(setup_tokens.check_token(employee, earlier))
+
+    def test_ambiguous_send_keeps_the_new_link(self):
+        employee = Employee.objects.create(name="Ivy", email="ivy@corp.example")
+        with override_settings(EMAIL_BACKEND="training.test_mail.AmbiguousBackend"), \
+                self.assertLogs("training.accounts", "ERROR"), self.captureOnCommitCallbacks(execute=True):
+            send_account_email(employee, "setup")
+        employee.refresh_from_db()
+        self.assertEqual(employee.link_generation, 1)
+        self.assertIsNotNone(employee.link_send_failed_at)
 
     def test_existing_account_notice_does_not_clear_a_failed_link(self):
         employee = Employee.objects.create(name="Ivy", email="ivy@corp.example", link_send_failed_at=timezone.now())

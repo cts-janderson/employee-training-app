@@ -12,12 +12,14 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
+from .mail import AmbiguousMailError
 from .models import Employee
 
 logger = logging.getLogger("training.accounts")
@@ -136,28 +138,30 @@ def send_account_email(employee, purpose):
     subject, route, tokens = _EMAILS[purpose]
 
     def send():
+        issued = None
         try:
-            employee.refresh_from_db()
-            previous = employee.link_generation
             if route:
-                # Sign the link for the next generation, but record it only once the email is sent, so a
-                # failed send leaves the employee's earlier link working.
-                employee.link_generation = previous + 1
-                link = _link(route, employee, tokens)
-            else:
-                link = settings.APP_BASE_URL + reverse("sign_in")
+                # Each send gets its own generation, which supersedes every earlier link.
+                Employee.objects.filter(pk=employee.pk).update(link_generation=F("link_generation") + 1)
+            employee.refresh_from_db()
+            issued = employee.link_generation
+            link = _link(route, employee, tokens) if route else settings.APP_BASE_URL + reverse("sign_in")
             body = render_to_string(f"training/email/{purpose}.txt", {"employee": employee, "link": link})
             send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [employee.email])
-        except Exception:
+        except Exception as exc:
             # The response must look the same either way; administrators see the flag and can resend.
             logger.exception("Couldn't send the %s email to employee %s", purpose, employee.pk)
-            if route:
-                Employee.objects.filter(pk=employee.pk).update(link_send_failed_at=timezone.now())
+            if route and issued is not None:
+                newest = Employee.objects.filter(pk=employee.pk, link_generation=issued)
+                if isinstance(exc, AmbiguousMailError):
+                    # The email may have arrived, so its link must keep working.
+                    newest.update(link_send_failed_at=timezone.now())
+                elif newest.update(link_generation=issued - 1, link_send_failed_at=timezone.now()):
+                    # Definitely not sent: the earlier link works again, unless a newer one was issued meanwhile.
+                    employee.link_generation = issued - 1
             return
         if route:
-            # A newer link sent meanwhile keeps its generation; this one is then superseded, as intended.
-            Employee.objects.filter(pk=employee.pk, link_generation__lte=previous).update(
-                link_generation=previous + 1, link_send_failed_at=None)
+            Employee.objects.filter(pk=employee.pk, link_generation=issued).update(link_send_failed_at=None)
         if settings.DEBUG and settings.DEV_AUTH_STUB:
             logger.info("Local %s link for %s: %s", purpose, employee.email, link)
 
