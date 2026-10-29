@@ -1,7 +1,7 @@
-Hello {{ employee.name }},
+{% autoescape off %}Hello {{ employee.name }},
 
 An administrator created an Employee Training account for you. Choose a password here:
 
 {{ link }}
 
-The link expires in one day. Ask your administrator for a new one if it expires.
+The link expires in one day. Ask your administrator for a new one if it expires.{% endautoescape %}

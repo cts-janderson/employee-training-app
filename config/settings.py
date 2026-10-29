@@ -1,4 +1,5 @@
 import os
+from ipaddress import ip_network
 from pathlib import Path
 
 import dj_database_url
@@ -14,9 +15,9 @@ if not SECRET_KEY:
     else:
         raise ImproperlyConfigured("DJANGO_SECRET_KEY is required when DJANGO_DEBUG is off")
 
+if not DEBUG and not os.getenv("DJANGO_ALLOWED_HOSTS"):
+    raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS is required when DJANGO_DEBUG is off")
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
-if os.getenv("RENDER_EXTERNAL_HOSTNAME"):
-    ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -69,6 +70,9 @@ STORAGES = {"staticfiles": {"BACKEND": "config.storage.VersionedStaticFilesStora
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 DEFAULT_FROM_EMAIL = os.getenv("NOTIFICATION_FROM_EMAIL", "training@example.test")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+if not DEBUG and not APP_BASE_URL.startswith("https://"):
+    raise ImproperlyConfigured("APP_BASE_URL must use https when DJANGO_DEBUG is off")
+CSRF_TRUSTED_ORIGINS = [APP_BASE_URL] if APP_BASE_URL.startswith("https://") else []
 NOTIFICATION_MAX_AUTO_ATTEMPTS = 3
 NOTIFICATION_CLAIM_LEASE_SECONDS = 300
 
@@ -93,20 +97,38 @@ ACCOUNT_RATE_LIMITS = {"sign_in": (5, 15 * 60), "register": (5, 60 * 60), "accou
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_AGE = int(os.getenv("SESSION_COOKIE_AGE", str(12 * 60 * 60)))
 CSRF_COOKIE_SECURE = not DEBUG
+# Trusted only because the application server is reachable through the proxy alone; see docs/plans/30.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = not DEBUG
+# The proxy's health probe uses plain HTTP inside the deployment network.
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+# Start small and raise once HTTPS is proven; subdomain and preload flags are left off on purpose.
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "3600"))
+SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+# Requests from these networks may name the client in X-Forwarded-For; set to the reverse proxy's network.
+TRUSTED_PROXY_NETWORKS = [ip_network(value.strip()) for value in os.getenv("TRUSTED_PROXY_NETWORKS", "").split(",")
+                          if value.strip()]
 
 DEV_AUTH_STUB = os.getenv("DEV_AUTH_STUB", "0") == "1"
 DEV_ADMIN_EMAIL = os.getenv("DEV_ADMIN_EMAIL", "demo.admin@example.test")
 if DEV_AUTH_STUB and (not DEBUG or any(host not in {"localhost", "127.0.0.1", "[::1]"} for host in ALLOWED_HOSTS)):
     raise ImproperlyConfigured("DEV_AUTH_STUB requires debug mode and loopback-only allowed hosts")
 
-if DEV_AUTH_STUB:
-    # Local account links go to the server log because the in-memory email sink can't be read.
-    LOGGING = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "handlers": {"console": {"class": "logging.StreamHandler"}},
-        "loggers": {"training.accounts": {"handlers": ["console"], "level": "INFO"}},
-    }
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {"redact_account_links": {"()": "config.logging.RedactAccountLinks"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "filters": ["redact_account_links"]}},
+    "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
+    "loggers": {
+        # Django's own handlers would also print request lines unfiltered.
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "django.server": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        # Local account links go to the server log because the in-memory email sink can't be read.
+        "training.accounts": {"handlers": ["console"], "level": "INFO" if DEV_AUTH_STUB else "WARNING",
+                              "propagate": False},
+    },
+}

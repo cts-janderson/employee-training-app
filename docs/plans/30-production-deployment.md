@@ -139,7 +139,27 @@ The October 29, 2026 security review of the Slice 29 and 31 commits found no cri
 - **Step C:** send account emails off the request path, so the reset response time doesn't reveal whether an email is registered.
 - **Step C:** give each link purpose its own counter, so a reset request doesn't cancel an outstanding verification or setup link.
 - **Step A follow-up:** let administrators reject or remove an unverified applicant, or expire one automatically. Today an unverified registration blocks an invitation to the same address.
-- **Step B:** set `SECURE_REFERRER_POLICY = "same-origin"` explicitly, and escape nothing in the plain-text account emails (`{% autoescape off %}`).
+- **Step B:** set `SECURE_REFERRER_POLICY = "same-origin"` explicitly, and turn off autoescaping in the plain-text account email templates.
+
+## Status
+
+**Step B, implemented October 29, 2026.** These are in `config/settings.py`, `config/logging.py` and `_client` in `training/account_views.py`:
+
+- With debug off, startup requires an https `APP_BASE_URL` and an explicit `DJANGO_ALLOWED_HOSTS`.
+- `CSRF_TRUSTED_ORIGINS` comes from `APP_BASE_URL`.
+- HSTS starts at one hour, set through `SECURE_HSTS_SECONDS`. The referrer policy is `same-origin`, frames are denied, and sessions last 12 hours by default.
+- `/health/` is exempt from the https redirect.
+- Every log goes to stdout through a filter that redacts account-link tokens, including Django's own request and runserver lines.
+- Rate limits take the client address from the last `X-Forwarded-For` entry, but only when the request comes from a network listed in `TRUSTED_PROXY_NETWORKS`.
+- `RENDER_EXTERNAL_HOSTNAME` is removed.
+- Plain-text account emails no longer escape names, and demo emails get the same normalization as real ones.
+- `check --deploy` reports only the two intended HSTS warnings: subdomains and preload.
+- Tests are in `training/test_production_settings.py`.
+
+Gunicorn's access-log redaction comes with step E. Other open items, also for step E:
+
+- **Proxy header handling:** Caddy must replace any `X-Forwarded-For` header the client sends.
+- **Network isolation:** `web` must be reachable only through Caddy. Both the forwarded-address and the forwarded-protocol header depend on this.
 
 ## Order
 
