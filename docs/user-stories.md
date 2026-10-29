@@ -1,6 +1,6 @@
 # User stories
 
-This document collects the application's user stories in one place. `US-01`–`US-12` are the confirmed MVP baseline, reproduced from [mvp.md](mvp.md#6-refined-user-stories-and-acceptance-criteria) without changing their acceptance criteria. `US-13`–`US-21` are locally implemented proposed additions; they are not part of the confirmed MVP or its [release criteria](implementation-plan.md#mvp-release-criteria).
+This document collects the application's user stories in one place. `US-01`–`US-12` are the confirmed MVP baseline, reproduced from [mvp.md](mvp.md#6-refined-user-stories-and-acceptance-criteria) without changing their acceptance criteria. `US-13`–`US-22` are locally implemented proposed additions; they are not part of the confirmed MVP or its [release criteria](implementation-plan.md#mvp-release-criteria).
 
 ## Confirmed MVP stories
 

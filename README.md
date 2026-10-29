@@ -47,7 +47,7 @@ The [MVP requirements](docs/mvp.md) define confirmed stories `US-01`–`US-12`. 
 
 | Document | Purpose |
 | --- | --- |
-| [Local development](docs/local-development.md) | Environment, database, worker, tests, and static assets |
+| [Local development](docs/local-development.md) | Environment, database, worker, Python and JavaScript tests, editor bundle, and static assets |
 | [Demo guide](docs/demo-guide.md) | Seed data and administrator-to-learner walkthrough |
 | [User stories](docs/user-stories.md) | Confirmed MVP and proposed extension stories |
 | [Authentication plan](docs/plans/email-password-authentication.md) | Deferred email/password sign-in, self-registration with approval, and administrator-created employees |
@@ -55,4 +55,4 @@ The [MVP requirements](docs/mvp.md) define confirmed stories `US-01`–`US-12`. 
 | [Glossary](docs/GLOSSARY.md) and [architecture decisions](docs/adr/) | Domain terms and consequential design choices |
 | [HCI review](docs/hci-review.md), [implementation plan](docs/hci-implementation-plan.md), and [validation](docs/hci-validation.md) | Interface findings, changes, and remaining human review |
 
-The Django project is in `config/`; application code and tests are in `training/`; templates are in `templates/training/`. Dependencies are declared in `pyproject.toml`.
+The Django project is in `config/`; application code and tests are in `training/`; templates are in `templates/training/`. Dependencies are declared in `pyproject.toml`; document editor dependencies are in `package.json`.
