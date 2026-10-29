@@ -1,5 +1,6 @@
 # Main destination designs
 
+- [Training library and report concepts](screenshot-alignment/README.md): five screenshot adaptations for the current app, with the [implementation plan](../plans/library-and-reports.md), report populations, delivery slices, and bounded draft import.
 - [Administrator tracking chart](admin-tracking-relay.md): live pending-workload chart design, source notes, and SVG preview.
 - [Administrator quiz outcomes](admin-quiz-outcomes.md): the chart mode for passed, retry-needed, and not-attempted quiz assignments, with employee-level values.
 - [Training library concept](training-library-concept.png): imagegen layout study for aligned training rows with published and draft states shown together. The [implementation plan](../plans/training-library-layout.md) records the adapted layout and checks.

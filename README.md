@@ -2,7 +2,7 @@
 
 A Django application for authoring versioned training, assigning it to employees, tracking completion, and reviewing quiz and notification history. This repository currently supports **local demonstrations with synthetic employees**. It is not ready for real employee data or internal rollout.
 
-Administrators can publish training with slides and optional quizzes, assign a published version to employees or groups, review progress, and manage deadlines, renewals, waivers, and reminders. Learners can resume assigned training, acknowledge slides, take or retry quizzes, and review their own history. The four quiz formats are single choice, multiple selection, true or false, and ordering.
+Administrators can publish training with nested documents, rich text, and optional quizzes (legacy slide versions remain supported), assign a published version to employees or groups, review progress, and manage deadlines, renewals, waivers, and reminders. Learners can resume assigned training, acknowledge documents or legacy slides, take or retry quizzes, and review their own history. The four quiz formats are single choice, multiple selection, true or false, and ordering.
 
 ## Quick start
 
@@ -37,7 +37,7 @@ With PostgreSQL running, run configuration and migration checks, the full test s
 
 ## Current scope and rollout status
 
-- **Implemented locally:** versioned authoring; slide acknowledgment; quiz grading and retries; individual and group assignment; administrator reports and CSV export; renewal review; assignment cancellation, archiving, and waiver; durable notification intents, scheduled reminders, and audited manual nudges.
+- **Implemented locally:** versioned document and legacy slide authoring; document/slide acknowledgment; quiz grading and retries; individual and group assignment; completion reports by training/employee with matching CSV exports; reviewed Markdown/text draft import; renewal review; assignment cancellation, archiving, and waiver; durable notification intents, scheduled reminders, and audited manual nudges.
 - **Development integrations:** a loopback-only demo actor switcher stands in for sign-in. The notification worker uses Django's in-memory email sink and synthetic `.test` addresses; it does not send external email.
 - **Before real use:** implement [email and password authentication with enrollment approval](docs/plans/email-password-authentication.md) and connect an approved email provider, prove deployment and worker operation, verify PostgreSQL migrations and concurrency, and complete the operational owner and employee-data retention/access approvals in the [MVP release criteria](docs/implementation-plan.md#mvp-release-criteria). Keep real employee data out until those gates are met.
 

@@ -37,3 +37,16 @@ The remaining interaction ideas from [Slice 27](27-question-type-presentation.md
 - Focused library, question presentation, quiz, and browsing tests passed after the last template change: 39 tests.
 - Local documentation links resolved, and `makemigrations --check --dry-run` reported no changes.
 - A live browser preview could not run in this sandbox because binding the local Django server returned `Operation not permitted`.
+
+## Guided creation roadmap: first delivery
+
+Implemented locally on October 28, 2026. The user selected quiz improvements first, followed by the [document authoring redesign](document-training-model.md).
+
+- Both quiz editors provide Setup, Questions, and Review anchors in one workspace.
+- Review uses the existing domain publication/attachment checks against saved content. Issues link to fields without marking untouched fields invalid.
+- Editing shows an explicit unsaved-review notice. Validation failures, removal review, cancellation, and conflicts retain submitted fields; conflicts withhold attachment/publication next actions.
+- Ready library quizzes offer draft-specific copy review links. Attached quizzes lead to training publication review, which still validates the entire training.
+- Preview describes saved content and records no answers or attempts. Entry descriptions distinguish reusable quizzes from training-specific copies.
+- Existing endpoint contracts, four formats, grading, explicit saves, and revision locking are retained. No schema migration is needed.
+
+Verification: 277 Django tests passed on SQLite with six database-specific tests skipped; eight Node event checks passed. Migration drift and static build checks passed. The preview server was started with a separate temporary synthetic database, but this session exposed no browser, so screenshots, visual layout, and keyboard review remain unverified. This delivery does not complete the document milestones or their feasibility gate.

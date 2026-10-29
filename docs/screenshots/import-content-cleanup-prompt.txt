@@ -1,0 +1,10 @@
+Tool: built-in image_gen (imagegen skill), not CLI fallback.
+Source: Screenshot 2026-10-28 at 12.46.44 PM.png
+Output: import-content-cleaned.png
+The original screenshot is preserved. The generated reference removes the obsolete subtitle region; the tool also rescaled the screenshot.
+
+Final prompt:
+Use case: precise-object-edit
+Asset type: existing UI screenshot, edit target is the provided screenshot.
+Primary request: Remove the black hand-drawn squiggle and all obsolete text directly beneath the squiggle in the subtitle of the Import content dialog. Replace that region with pure white (#ffffff) whitespace. Keep the visible subtitle prefix exactly: "Upload your files and we’ll help you organize them". Erase everything after "them" on that subtitle line, including the squiggle, leaving blank white space.
+Constraints: Change only that small subtitle region (roughly x400–580, y74–102 in the 1131×677 input). Preserve the screenshot canvas size and all other pixels, layout, text, icons, colors, borders and controls as closely as possible. Do not infer or restore the obscured wording. No other redesign.

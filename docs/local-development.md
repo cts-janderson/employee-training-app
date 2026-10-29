@@ -21,7 +21,7 @@ If you use a different database name, user, host, or port, export a matching `DA
 ./scripts/start-local.sh
 ```
 
-The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, and starts Django at <http://127.0.0.1:8000/>. Visit `/health/` for a simple health response. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
+The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, starts the import-review cleanup loop, and starts Django at <http://127.0.0.1:8000/>. The cleanup loop stops when the startup script exits. Visit `/health/` for a simple health response. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
 
 You can run the steps separately when diagnosing startup:
 
@@ -87,3 +87,44 @@ DATABASE_URL=sqlite:///:memory: DJANGO_DEBUG=1 DEV_AUTH_STUB=1 .venv/bin/python 
 ```
 
 PostgreSQL-specific locking tests may be skipped on SQLite. `collectstatic` writes assets to the ignored `staticfiles/` directory. Before rollout, run the full suite and concurrency checks on the target PostgreSQL environment and complete the [release criteria](implementation-plan.md#mvp-release-criteria).
+
+## Training draft import cleanup
+
+The training library's **Create content → Import training drafts** accepts up to five UTF-8 Markdown/text files of 1 MB each. Review title edits, slide previews, warnings, and removals before creating drafts. The one-hour review is owned by the current synthetic administrator; draft creation is atomic and replay-safe. See [ADR-0007](adr/0007-short-lived-training-import-review.md).
+
+The normal startup script runs cleanup every minute. If running Django manually, run the cleanup loop in another terminal using the same database:
+
+```bash
+DJANGO_DEBUG=1 DEV_AUTH_STUB=1 .venv/bin/python manage.py cleanup_training_imports --loop
+```
+
+Omit `--loop` for a single cleanup pass. Expired uncommitted reviews and committed result records older than seven days are removed; created trainings remain. Raw uploads are never permanently saved. Configure a scheduled cleanup job before introducing any non-local deployment; the existing real-data gate still applies.
+
+## Completion reports
+
+Use **Reports** for summaries by training or employee, then open a training for assignment cycles or version-specific slide acknowledgments. **Assignments** retains its workload and quiz-outcome charts and operational actions. Default completion counts pending and completed nonarchived cycles for active synthetic employees. Renewals count separately; history populations are selected explicitly. Search, activity and version filters apply to the full population and matching CSV export before pagination.
+
+For the creation control's JavaScript event regression checks, use Node's built-in test runner (no npm dependencies):
+
+```bash
+node --test training/js_tests/create-menu.test.cjs
+```
+
+These checks exercise disclosure state and dismissal behavior without opening a browser. They complement the CSRF-enforced Django creation workflow tests and do not replace rendering or assistive-technology review.
+
+
+## Document authoring
+
+Apply migration 0015 before starting the app. **Create content → Create training** opens the document workspace. Add sections/documents, save explicitly, then review saved content before publication. Existing slide drafts offer **Convert saved draft to documents**; library revision actions create document drafts while retaining the published slide version and its evidence.
+
+The editor bundle is checked in, so normal Django setup does not need Node or a CDN. To change the editor source, use Node 22 or newer:
+
+```bash
+npm ci
+npm run build:editor
+npm test
+```
+
+Commit the source, lockfile, generated bundle, and bundled third-party notices together. The server validates the structured body independently. The authoring interface offers a structured-content fallback if JavaScript fails; it does not silently substitute an empty document.
+
+New file selections import one document per training, preserving headings inside it. Existing uncommitted slide import batches keep their recorded format. Reports retain By slide for legacy versions and add By document for document versions. Assignment exports add content format and document evidence columns while retaining existing slide columns.

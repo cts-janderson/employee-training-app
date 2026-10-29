@@ -9,7 +9,7 @@ A person within the organization whose assignments and training history remain a
 _Avoid_: Email address, login account
 
 **Training**:
-A reusable learning requirement consisting of ordered slides and an optional quiz, independent of any employee's obligation to complete it.
+A reusable learning requirement consisting of learning documents or legacy slides and an optional quiz, independent of any employee's obligation to complete it.
 _Avoid_: Course, module
 
 **Published training version**:
@@ -17,7 +17,7 @@ An immutable edition of a training's content and assessment rules, shared by the
 _Avoid_: Live training, latest content
 
 **Draft training version**:
-An unpublished, editable edition of training that may contain unfinished slides and questions.
+An unpublished, editable edition of training that may contain unfinished learning content and questions.
 _Avoid_: Published version, assigned content
 
 **Training display title**:
@@ -45,7 +45,7 @@ An employee's submitted answers to an assignment's quiz together with the assess
 _Avoid_: Completion, quiz session
 
 **Completion**:
-Fulfillment of an assignment through acknowledgment of every slide and, when the training includes a quiz, a passing attempt.
+Fulfillment of an assignment through acknowledgment of every required document (or every slide in a legacy version) and, when the training includes a quiz, a passing attempt.
 _Avoid_: Mastery, attendance
 
 **Pending assignment**:
@@ -119,3 +119,16 @@ _Avoid_: Attachment, resource, slide
 **Administrator**:
 An employee authorized to manage training, employees, assignments, and results across the organization, who may also receive training assignments.
 _Avoid_: Separate administrator identity
+
+
+**Document**:
+A titled, continuous unit of learning content within a training; its acknowledgment is required for assignment completion.
+_Avoid_: Slide, attachment, page
+
+**Section**:
+An organizational grouping of documents and other sections within a training. Its completion is derived from its descendant documents.
+_Avoid_: Acknowledgment unit, document
+
+**Document acknowledgment**:
+An employee's explicit confirmation of a document within an assignment, without establishing attention or comprehension.
+_Avoid_: Verified view, proof of reading

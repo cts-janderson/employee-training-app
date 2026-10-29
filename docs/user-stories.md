@@ -1,6 +1,6 @@
 # User stories
 
-This document collects the application's user stories in one place. `US-01`–`US-12` are the confirmed MVP baseline, reproduced from [mvp.md](mvp.md#6-refined-user-stories-and-acceptance-criteria) without changing their acceptance criteria. `US-13`–`US-19` are locally implemented proposed additions; they are not part of the confirmed MVP or its [release criteria](implementation-plan.md#mvp-release-criteria).
+This document collects the application's user stories in one place. `US-01`–`US-12` are the confirmed MVP baseline, reproduced from [mvp.md](mvp.md#6-refined-user-stories-and-acceptance-criteria) without changing their acceptance criteria. `US-13`–`US-21` are locally implemented proposed additions; they are not part of the confirmed MVP or its [release criteria](implementation-plan.md#mvp-release-criteria).
 
 ## Confirmed MVP stories
 
@@ -41,6 +41,8 @@ As an administrator, I want to add quiz questions and configure a passing thresh
 - Incomplete questions can be saved and resumed without satisfying publication requirements.
 - Administrators can author a library quiz separately and attach a copy of a complete, titled quiz to a training draft. Later changes to either copy do not change the other.
 - Replacing an attached draft quiz requires confirmation. Training publication still validates its saved quiz copy.
+- Both editors provide Setup, Questions, and Review navigation in one workspace. Saved readiness issues link to correction fields; unsaved edits are identified separately.
+- Saved learner preview records no answers or attempts. Ready library quizzes lead to draft-specific attachment review; attached quizzes lead to whole-training publication review.
 
 #### US-04 — Publish versions
 
@@ -181,6 +183,7 @@ As an administrator, I want to export the assignment records shown by my dashboa
 - The export records when it was generated and the organization time zone used for displayed dates.
 - Employee-entered values are encoded safely for spreadsheet opening. Quiz answer keys and submitted answers are excluded.
 - The generated file is the export's record; no separate export log is kept.
+- Completion report exports additionally follow the explicit populations, summary schemas, version and slide scopes defined in [US-20](#us-20--compare-assignment-completion-by-training-and-employee); they do not reuse the pending dashboard population implicitly.
 
 #### US-14 — Assign training by group
 
@@ -224,6 +227,7 @@ As an administrator, I want to search and page through trainings, quizzes, emplo
 - Results show a total count and have a stable, understandable sort order across pages.
 - Opening a result and returning to the list preserves the current search, filters, and page when practical.
 - Search results respect the same authorization and archive visibility rules as the unfiltered lists.
+- The training library offers stable Title A–Z/Z–A ordering and separately labeled draft/publication slide and quiz summaries. Completion report browsing follows [US-20](#us-20--compare-assignment-completion-by-training-and-employee).
 
 ### Epic F: Supporting Learning Material
 
@@ -280,3 +284,52 @@ As an administrator, I want to compare quiz outcomes across trainings and see th
 - `US-13` is the smallest next slice because it uses existing assignment evidence. `US-14` and `US-15` add the most value once assignments are managed at scale.
 - Group size, renewal timing, and waiver authority were decided on 2026-10-27; see [ADR-0005](adr/0005-renewal-interval-on-training.md) and [ADR-0006](adr/0006-final-waivers-by-any-other-administrator.md). Supporting material is links only, and exports keep no separate log.
 - Production sign-in, external email delivery, deployment proof, PostgreSQL concurrency checks, backup and restore, accessibility evaluation, and the real-data gate remain in the [release criteria](implementation-plan.md#mvp-release-criteria) and [HCI validation](hci-validation.md); these proposed stories do not replace those gates.
+
+### Epic I: Library and completion reports
+
+#### US-20 — Compare assignment completion by training and employee
+
+**Local status:** Implemented locally; see the [delivery plan](plans/library-and-reports.md).
+
+As an administrator, I want completion summaries and drilldowns so I can review training evidence across employees and renewal cycles.
+
+**Acceptance criteria:**
+
+- Reports default to pending and completed nonarchived cycles for active synthetic employees; canceled, waived, and archived histories are explicit separate populations. Every renewal cycle counts once, across all published versions unless filtered.
+- Completion is completed divided by pending plus completed. Empty denominators and history populations have no completion rate. Employee totals count distinct employees, not sums of training rows.
+- Training and employee summaries retain eligible empty entities when no search is active. Search matches employee name/email and assigned version title. Scope applies before pagination to totals, drilldowns, and all exports.
+- Training details distinguish state, slide acknowledgments, latest quiz score, due date, and completion; historical titles and version/cycle identifiers remain intact. By slide requires one published version and includes zero-acknowledgment slides.
+- Employee reports retain prior completions and pending renewals, current groups are contextual, and inactive profiles open with a visible inactive scope.
+- CSV exports match the selected population, include generation time, organization time zone and relevant IDs, neutralize spreadsheet formula prefixes, and exclude answer keys and responses. Only administrators can access reports and exports.
+- The library retains draft/published badges and history, adds labeled per-version slide/quiz summaries, A–Z/Z–A sorting, and keyboard-operable creation actions. Existing workload and quiz-outcome chart rules in US-11, US-13, and US-19 remain unchanged.
+
+#### US-21 — Import text files into reviewed training drafts
+
+**Local status:** Implemented locally; see [ADR-0007](adr/0007-short-lived-training-import-review.md).
+
+As an administrator, I want to review a bounded text conversion before creating editable drafts.
+
+**Acceptance criteria:**
+
+- Select up to five UTF-8 `.md`/`.txt` files, each at most 1 MB, within a bounded multipart request. Unsupported, binary, invalid, or oversized files receive named errors. Valid conversions remain available for review.
+- A Markdown first H1 proposes the title, H2 headings split slides, preamble becomes Introduction, lower headings remain plain text, and fenced code headings do not split slides. Without H2, create one slide. Text files use the filename title and one slide.
+- Imported text is escaped; no remote links are fetched and no content is executed. Title/header/body/slide limits match authoring and are never silently truncated.
+- Review includes editable titles, slide previews, warnings, removal and back actions. Empty titles/bodies remain subject to normal publication checks.
+- Commit creates only new draft version 1 records, atomically, with no publishing or assigning. Owner, revision, one-hour expiry and row locking protect commit; duplicate and concurrent submissions return the same results.
+- Cleanup removes expired reviews and results more than seven days old without deleting created trainings. Raw uploads are not permanently retained. All routes require administrator access and CSRF on writes.
+
+
+#### US-22 — Author and complete document-based training
+
+As an administrator, I want to organize editable documents in nested sections so that training can be authored as continuous learning material.
+
+**Acceptance criteria**
+
+- New interface-created trainings use documents. Legacy slide versions, URLs, assignments, and evidence remain available; conversion occurs in an explicitly converted draft or a new revision.
+- Authors can add documents/sections, rename, move, duplicate subtrees, and review affected descendants before removal. Moves reject cycles and cross-version parents; copied items receive new identities.
+- Rich text supports headings, paragraphs, emphasis, HTTPS links, nested lists, callouts, and preserved legacy footer content. Explicit saves use revision guards; errors/conflicts retain submitted content and never claim it is saved.
+- Publication validates every required document and freezes outline, content, and the optional training-level quiz. Revisions have independent content and receive no transferred acknowledgments.
+- Learners navigate the published outline, resume a document, acknowledge each document, and pass the optional quiz. Section counts derive from descendant documents; sections and content blocks do not record acknowledgments.
+- Document reports, drilldowns, library counts, and CSV exports use the assigned version and assignment cycle. Document evidence is labeled separately from legacy slide evidence.
+- New text imports review one document per file; headings stay within documents. Existing review batches retain their recorded slide conversion contract.
+- See the [document plan](plans/document-training-model.md) and [storage decision](adr/0008-version-owned-document-content.md) for limits and verification.
