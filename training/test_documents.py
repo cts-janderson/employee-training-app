@@ -422,4 +422,6 @@ class DocumentMigrationTests(TransactionTestCase):
             self.assertEqual(evidence.slide_progress.get().acknowledged_at,progress.acknowledged_at)
             self.assertEqual(Slide.objects.get(pk=slide.pk).body,"Exact\n body")
         finally:
-            MigrationExecutor(connection).migrate([latest])
+            # Restore the newest schema, not this test's target, so later tests see every migration.
+            restore=MigrationExecutor(connection)
+            restore.migrate(restore.loader.graph.leaf_nodes())

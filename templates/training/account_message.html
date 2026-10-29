@@ -1,0 +1,7 @@
+{% extends "training/base.html" %}
+{% block title %}{{ title }} · Employee Training{% endblock %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  <p>{{ message }}</p>
+  {% if link %}<p><a href="{{ link }}">{{ link_text }}</a></p>{% endif %}
+{% endblock %}

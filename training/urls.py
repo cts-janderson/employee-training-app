@@ -1,11 +1,23 @@
+from django.contrib.auth.views import LogoutView
 from django.urls import path
 
 from . import assignment_admin_views, assignment_views, employee_views, group_views, library_quiz_views, notification_views, quiz_learner_views, quiz_views, views
-from . import report_views, import_views, document_views
+from . import account_views, report_views, import_views, document_views
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("health/", views.health, name="health"),
+    path("account/", account_views.account_status, name="account_status"),
+    path("account/sign-in/", account_views.SignInView.as_view(), name="sign_in"),
+    path("account/sign-out/", LogoutView.as_view(next_page="sign_in"), name="sign_out"),
+    path("account/register/", account_views.register_view, name="register"),
+    path("account/verify/<uidb64>/<token>/", account_views.verify_email_view, name="verify_email"),
+    path("account/password/", account_views.PasswordChange.as_view(), name="password_change"),
+    path("account/password/done/", account_views.password_change_done, name="password_change_done"),
+    path("account/reset/", account_views.password_reset_request, name="password_reset"),
+    path("account/reset/<uidb64>/<token>/", account_views.PasswordResetConfirm.as_view(), name="password_reset_confirm"),
+    path("account/setup/<uidb64>/<token>/", account_views.AccountSetup.as_view(), name="account_setup"),
+    path("accounts/", account_views.account_admin, name="account_admin"),
     path("trainings/", views.training_list, name="training_list"),
     path("trainings/new/", views.new_training, name="new_training"),
     path("trainings/create/", views.create_content, name="create_content"),

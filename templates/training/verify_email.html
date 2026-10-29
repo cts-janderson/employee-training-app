@@ -1,0 +1,7 @@
+{% extends "training/base.html" %}
+{% block title %}Confirm email · Employee Training{% endblock %}
+{% block content %}
+  <h1>Confirm your email address</h1>
+  <p>Confirm that {{ employee.email }} is your address.</p>
+  <form method="post">{% csrf_token %}<button type="submit">Confirm email address</button></form>
+{% endblock %}

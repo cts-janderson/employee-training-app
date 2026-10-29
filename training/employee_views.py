@@ -73,6 +73,8 @@ def edit_employee(request, employee_id):
 @require_http_methods(["GET", "POST"])
 @demo_environment_required
 def demo_switch(request):
+    if request.user.is_authenticated:
+        return HttpResponseForbidden("Sign out before switching to a demo profile.")
     if request.method == "POST":
         try:
             employee = get_object_or_404(Employee, pk=request.POST.get("employee_id"), is_demo=True)

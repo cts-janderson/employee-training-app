@@ -1,6 +1,6 @@
 # Email and password authentication plan
 
-**Status:** Deferred implementation  
+**Status:** Skeleton implemented locally in [Slice 29](29-sign-in-skeleton.md); steps 4–5 remain  
 **Date:** October 28, 2026
 
 Replace the local demo identity switcher with email and password sign-in. Employees may register themselves, subject to administrator approval; administrators may also create employee records. Keep training history attached to the existing permanent employee ID so an email change does not create a new person or transfer their records.

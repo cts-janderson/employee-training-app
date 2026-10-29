@@ -1,0 +1,7 @@
+Hello {{ employee.name }},
+
+Reset your Employee Training password here:
+
+{{ link }}
+
+The link expires in one day. If you didn't ask to reset your password, ignore this email.

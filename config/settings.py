@@ -19,6 +19,8 @@ if os.getenv("RENDER_EXTERNAL_HOSTNAME"):
     ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
 INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
     "training",
@@ -30,6 +32,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -39,7 +42,11 @@ TEMPLATES = [
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
-        "OPTIONS": {"context_processors": ["django.template.context_processors.request", "django.template.context_processors.csrf"]},
+        "OPTIONS": {"context_processors": [
+            "django.template.context_processors.request",
+            "django.template.context_processors.csrf",
+            "training.context_processors.account_navigation",
+        ]},
     }
 ]
 WSGI_APPLICATION = "config.wsgi.application"
@@ -65,6 +72,25 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 NOTIFICATION_MAX_AUTO_ATTEMPTS = 3
 NOTIFICATION_CLAIM_LEASE_SECONDS = 300
 
+# Employees sign in with email and password; see ADR-0009 and docs/plans/29-sign-in-skeleton.md.
+AUTH_USER_MODEL = "training.Employee"
+AUTHENTICATION_BACKENDS = ["training.accounts.EmployeeBackend"]
+# The Lower(email) constraint enforces uniqueness that this check can't see.
+SILENCED_SYSTEM_CHECKS = ["auth.W004"]
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+     "OPTIONS": {"user_attributes": ("name", "email")}},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+LOGIN_URL = "sign_in"
+LOGIN_REDIRECT_URL = "home"
+# Verification, setup and reset links share this lifetime.
+PASSWORD_RESET_TIMEOUT = 24 * 60 * 60
+# Rate limits use the default per-process cache until a shared cache is configured for deployment.
+ACCOUNT_RATE_LIMITS = {"sign_in": (5, 15 * 60), "register": (5, 60 * 60), "account_email": (3, 60 * 60)}
+
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
@@ -75,3 +101,12 @@ DEV_AUTH_STUB = os.getenv("DEV_AUTH_STUB", "0") == "1"
 DEV_ADMIN_EMAIL = os.getenv("DEV_ADMIN_EMAIL", "demo.admin@example.test")
 if DEV_AUTH_STUB and (not DEBUG or any(host not in {"localhost", "127.0.0.1", "[::1]"} for host in ALLOWED_HOSTS)):
     raise ImproperlyConfigured("DEV_AUTH_STUB requires debug mode and loopback-only allowed hosts")
+
+if DEV_AUTH_STUB:
+    # Local account links go to the server log because the in-memory email sink can't be read.
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "handlers": {"console": {"class": "logging.StreamHandler"}},
+        "loggers": {"training.accounts": {"handlers": ["console"], "level": "INFO"}},
+    }

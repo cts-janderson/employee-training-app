@@ -32,7 +32,9 @@ from .quiz_views import editable_version
 @require_GET
 @demo_actor_required
 def home(request):
-    return redirect("training_list" if request.employee.role == Employee.Role.ADMINISTRATOR else "my_training")
+    if request.employee.role != Employee.Role.ADMINISTRATOR:
+        return redirect("my_training")
+    return redirect("training_list" if request.employee.is_demo else "account_admin")
 
 
 @require_GET

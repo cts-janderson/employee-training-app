@@ -17,6 +17,7 @@ With a local PostgreSQL database and environment configured as in [README.md](RE
 - `.venv/bin/python -m pip install -e .` installs application dependencies.
 - `.venv/bin/python manage.py migrate` applies database migrations.
 - `.venv/bin/python manage.py bootstrap_demo_admin` creates the synthetic local administrator when debug and the stub are enabled.
+- `.venv/bin/python manage.py create_administrator --name ... --email ...` creates the first real (password) administrator; see [sign-in skeleton](docs/plans/29-sign-in-skeleton.md).
 - `.venv/bin/python manage.py check` checks Django configuration.
 - `.venv/bin/python manage.py runserver` starts the local server.
 - `.venv/bin/python manage.py dispatch_notifications --loop` runs the local notification sink worker separately.
@@ -24,7 +25,7 @@ With a local PostgreSQL database and environment configured as in [README.md](RE
 - `npm ci`, `npm run build:editor`, and `npm test` install editor dependencies, rebuild the checked-in document editor bundle, and run the JavaScript tests in `training/js_tests/`. See [document authoring](docs/local-development.md#document-authoring).
 - `.venv/bin/python manage.py collectstatic --noinput` builds static assets.
 
-Use the loopback-only demo actor switcher and local email sink for core-workflow development while identity and external delivery are deferred. Apply migrations through Slice 8 before running notifications, and through `0015` before using text import or document authoring. Record deployment, authentication, PostgreSQL migration and concurrency, and worker proof before internal rollout or introducing real employee data.
+Use the loopback-only demo actor switcher and local email sink for core-workflow development while identity and external delivery are deferred. Apply migrations through Slice 8 before running notifications, through `0015` before using text import or document authoring, and through `0016` before using email and password sign-in. Record deployment, authentication, PostgreSQL migration and concurrency, and worker proof before internal rollout or introducing real employee data.
 
 ## Coding Style & Naming Conventions
 

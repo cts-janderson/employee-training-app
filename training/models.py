@@ -1,5 +1,6 @@
 import uuid
 
+from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Case, CharField, F, OuterRef, Q, Subquery, Value, When
@@ -7,22 +8,49 @@ from django.db.models.functions import Coalesce, Lower, NullIf
 from django.utils import timezone
 
 
-class Employee(models.Model):
+class Employee(AbstractBaseUser):
     class Role(models.TextChoices):
         ADMINISTRATOR = "administrator", "Administrator"
         EMPLOYEE = "employee", "Employee"
+
+    class Approval(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
     email = models.EmailField()
     verified_email = models.EmailField(blank=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
     is_active = models.BooleanField(default=True)
     is_demo = models.BooleanField(default=False)
+    approval_status = models.CharField(max_length=10, choices=Approval.choices, default=Approval.APPROVED)
+    approval_decided_at = models.DateTimeField(null=True, blank=True)
+    approval_decided_by = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True,
+                                            related_name="approval_decisions")
+    # Bumped whenever a verification, setup or reset link is sent, so earlier links stop working.
+    link_generation = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Email uniqueness is the case-insensitive constraint below; see ADR-0009.
+    USERNAME_FIELD = "email"
+    EMAIL_FIELD = "email"
+    REQUIRED_FIELDS = ["name"]
 
     class Meta:
         constraints = [models.UniqueConstraint(Lower("email"), name="employee_email_ci_unique")]
+
+    def save(self, *args, **kwargs):
+        # Demo and invited employees have no password until one is set through an account link.
+        if not self.password:
+            self.set_unusable_password()
+        super().save(*args, **kwargs)
+
+    @property
+    def email_is_verified(self):
+        return bool(self.verified_email) and self.verified_email.lower() == self.email.lower()
 
     def __str__(self):
         return self.name
