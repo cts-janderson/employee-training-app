@@ -56,7 +56,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STORAGES = {"staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
+STORAGES = {"staticfiles": {"BACKEND": "config.storage.VersionedStaticFilesStorage"}}
 
 # The notification worker uses a local-only sink until the mail integration is approved.
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
