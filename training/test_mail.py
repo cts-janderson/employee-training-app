@@ -242,6 +242,11 @@ class FailingBackend:
         raise TransientMailError("graph_unreachable")
 
 
+class UnknownErrorBackend(FailingBackend):
+    def send_messages(self, messages):
+        raise RuntimeError("closed connection after accepting")
+
+
 class AmbiguousBackend(FailingBackend):
     def send_messages(self, messages):
         raise AmbiguousMailError("graph_no_answer")
@@ -267,6 +272,14 @@ class AccountEmailFailureTests(TestCase):
         employee.refresh_from_db()
         self.assertEqual(employee.link_generation, 1)
         self.assertIsNotNone(employee.link_send_failed_at)
+
+    def test_unknown_send_errors_keep_the_new_link(self):
+        employee = Employee.objects.create(name="Ivy", email="ivy@corp.example")
+        with override_settings(EMAIL_BACKEND="training.test_mail.UnknownErrorBackend"), \
+                self.assertLogs("training.accounts", "ERROR"), self.captureOnCommitCallbacks(execute=True):
+            send_account_email(employee, "setup")
+        employee.refresh_from_db()
+        self.assertEqual(employee.link_generation, 1)
 
     def test_existing_account_notice_does_not_clear_a_failed_link(self):
         employee = Employee.objects.create(name="Ivy", email="ivy@corp.example", link_send_failed_at=timezone.now())

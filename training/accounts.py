@@ -19,7 +19,7 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from .mail import AmbiguousMailError
+from .mail import PermanentMailError, TransientMailError
 from .models import Employee
 
 logger = logging.getLogger("training.accounts")
@@ -145,8 +145,13 @@ def _account_email_lock(employee_id):
     try:
         yield
     finally:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", [key])
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", [key])
+        except Exception:
+            # A session lock outlives transactions, so drop the connection rather than leave it held.
+            connection.close()
+            raise
 
 
 def send_account_email(employee, purpose):
@@ -158,6 +163,7 @@ def send_account_email(employee, purpose):
         # delivered link survives a crash; a definite failure then restores exactly the previous one.
         with _account_email_lock(employee.pk):
             issued = None
+            sending = False
             try:
                 with transaction.atomic():
                     current = Employee.objects.select_for_update().get(pk=employee.pk)
@@ -168,6 +174,7 @@ def send_account_email(employee, purpose):
                 issued = current.link_generation
                 link = _link(route, current, tokens) if route else settings.APP_BASE_URL + reverse("sign_in")
                 body = render_to_string(f"training/email/{purpose}.txt", {"employee": current, "link": link})
+                sending = True
                 send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [current.email])
             except Exception as exc:
                 # The response must look the same either way; administrators see the flag and can resend.
@@ -175,11 +182,12 @@ def send_account_email(employee, purpose):
                 if route and issued is not None:
                     # Only while this send's link is still the newest: a deactivation meanwhile must win.
                     newest = Employee.objects.filter(pk=employee.pk, link_generation=issued)
-                    if isinstance(exc, AmbiguousMailError):
-                        # The email may have arrived, so its link must keep working.
-                        newest.update(link_send_failed_at=timezone.now())
-                    else:
+                    if not sending or isinstance(exc, (TransientMailError, PermanentMailError)):
+                        # Certainly not delivered: the earlier link works again.
                         newest.update(link_generation=previous, link_send_failed_at=timezone.now())
+                    else:
+                        # Ambiguous or unknown: the email may have arrived, so its link must keep working.
+                        newest.update(link_send_failed_at=timezone.now())
                 employee.link_generation = Employee.objects.values_list("link_generation", flat=True).get(
                     pk=employee.pk)
                 return
