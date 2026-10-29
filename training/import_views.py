@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_http_methods
 
-from .dev_auth import demo_admin_required
+from .dev_auth import admin_required
 from .models import ImportBatch, Training
 from .training_imports import (MAX_FILES, MAX_FILE_BYTES, MAX_REQUEST_BYTES, ImportInputError,
                                new_batch, parse_file, review_warnings, update_batch)
@@ -60,7 +60,7 @@ class BoundedTextUpload(FileUploadHandler):
 # bounds first, then run the normal CSRF check before touching review state.
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def select_files(request):
     try:
         length = int(request.META.get("CONTENT_LENGTH") or 0)
@@ -115,7 +115,7 @@ def _review_page(request, batch, *, errors=None, submitted_titles=None, status=2
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def review_import(request, batch_id):
     batch = get_object_or_404(ImportBatch, pk=batch_id, owner=request.employee)
     if not batch.committed_at and batch.expires_at <= timezone.now():

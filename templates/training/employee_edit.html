@@ -4,7 +4,7 @@
   <p><a href="{{ back_url|default:'/employees/' }}">← Employees</a></p>
   <h1>Edit {{ employee.name }}</h1>
   <p><a href="{% url 'employee_report' employee.id %}">View training report</a></p>
-  <p class="muted">{% if employee.verified_email != employee.email %}Email updates are unavailable for this address.{% endif %}</p>
+  <p><span class="badge {{ status.1 }}">{{ status.0 }}</span>{% if status.2 %} <span class="muted">{{ status.2 }}</span>{% endif %}</p>
   {% if error %}<p class="error" role="alert"><a href="#employee-{{ error_field }}">{{ error }}</a></p>{% endif %}
   <form class="card stack" method="post">
     {% csrf_token %}

@@ -108,7 +108,7 @@ class AssignmentPlanAndAccessTests(TestCase):
                                              is_demo=True)
         self.bob = Employee.objects.create(id=uuid.UUID(int=1), name="Bob", email="bob@example.test",
                                            is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         self.slide = Slide.objects.create(version=self.version, position=1, header="Read", body="Material")
         self.version.status = TrainingVersion.Status.PUBLISHED
@@ -210,14 +210,14 @@ class QuizEditingSeamTests(TestCase):
         self.client.defaults["HTTP_HOST"] = "localhost"
         Employee.objects.create(name="Admin", email="demo.admin@example.test",
                                 role=Employee.Role.ADMINISTRATOR, is_demo=True)
-        quiz = Quiz.objects.create()
+        quiz = Quiz.objects.create(is_demo=True)
         response = self.client.post(reverse("library_quiz_editor", args=[quiz.id]), {
             "revision": quiz.revision, "title": "x" * 201, "passing_percent": "50", "action": "save",
         })
         self.assertContains(response, 'href="#quiz-title"', status_code=400)
 
     def test_editable_version_falls_back_only_for_post(self):
-        training = Training.objects.create()
+        training = Training.objects.create(is_demo=True)
         draft = TrainingVersion.objects.create(training=training, version_number=1)
         self.assertEqual(editable_version(training.id, for_post=False), draft)
         draft.status = TrainingVersion.Status.PUBLISHED
@@ -230,7 +230,7 @@ class QuizEditingSeamTests(TestCase):
             editable_version(uuid.uuid4(), for_post=True)
 
     def test_removal_review_and_library_lock(self):
-        quiz = Quiz.objects.create(title="Safety")
+        quiz = Quiz.objects.create(is_demo=True, title="Safety")
         question = Question.objects.create(quiz=quiz, position=1, type=Question.Type.SINGLE_CHOICE, prompt="Pick one")
         option = QuestionOption.objects.create(question=question, position=1, text="Yes")
         self.assertEqual(removal_review(quiz, "review_remove_quiz"),

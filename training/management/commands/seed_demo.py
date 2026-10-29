@@ -89,16 +89,16 @@ class Command(BaseCommand):
             ("Demo Operations", ("maya", "leo", "priya", "omar")),
             ("Demo New Starters", ("casey", "rowan")),
         ):
-            if EmployeeGroup.objects.filter(name__iexact=name).exists():
+            if EmployeeGroup.objects.filter(name__iexact=name, is_demo=True).exists():
                 raise CommandError(f"{name} already exists; choose a fresh demo database.")
-            group = EmployeeGroup.objects.create(name=name, created_at=now)
+            group = EmployeeGroup.objects.create(name=name, is_demo=True, created_at=now)
             for key in keys:
                 EmployeeGroupMembership.objects.get_or_create(
                     group=group, employee=people[key], defaults={"added_at": now},
                 )
 
     def _new_version(self, title, description, slides, *, training_id=None, renewal_months=None):
-        training = Training.objects.create(id=training_id or uuid.uuid4(),
+        training = Training.objects.create(id=training_id or uuid.uuid4(), is_demo=True,
                                            renewal_interval_months=renewal_months)
         version = TrainingVersion.objects.create(
             training=training, version_number=1, title=title, description=description,
@@ -129,7 +129,7 @@ class Command(BaseCommand):
             version=version, position=1, name="Example reference link",
             url="https://example.com", description="Placeholder link for the supporting material demo.",
         )
-        quiz = Quiz.objects.create(version=version, title="Safety check", passing_percent=75)
+        quiz = Quiz.objects.create(version=version, is_demo=True, title="Safety check", passing_percent=75)
         self._question(quiz, 1, Question.Type.SINGLE_CHOICE, "What should you report?", (
             ("A blocked exit", True, None), ("Only injuries", False, None),
         ))
@@ -176,7 +176,7 @@ class Command(BaseCommand):
         )
 
     def _library_quiz(self):
-        quiz = Quiz.objects.create(title="Demo: Privacy refresher", passing_percent=100)
+        quiz = Quiz.objects.create(is_demo=True, title="Demo: Privacy refresher", passing_percent=100)
         self._question(quiz, 1, Question.Type.TRUE_FALSE,
                        "Check a recipient before sharing a work file.", (
                            ("True", True, None), ("False", False, None),

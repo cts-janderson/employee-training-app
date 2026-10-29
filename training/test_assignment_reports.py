@@ -13,7 +13,7 @@ from .models import Assignment, Employee, Quiz, Slide, Training, TrainingVersion
 class ReportFixtures:
     def setUp(self):
         self.now = timezone.now()
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(
             training=self.training, version_number=1, title="Safety",
         )
@@ -51,7 +51,7 @@ class AssignmentReportTests(ReportFixtures, TestCase):
         late = self.assignment("Late", due_at=self.now - timedelta(days=1), completed_at=self.now)
         canceled = self.assignment("Canceled", canceled_at=self.now)
         archived = self.assignment("Archived", canceled_at=self.now, archived_at=self.now)
-        rows = report_rows(report_assignments(ReportFilters(state="all", activity="all"), now=self.now), now=self.now)
+        rows = report_rows(report_assignments(ReportFilters(state="all", activity="all"), is_demo=True, now=self.now), now=self.now)
         self.assertEqual(rows[0].assignment.id, overdue.id)
         self.assertEqual({row.assignment.id for row in rows},
                          {pending.id, overdue.id, started.id, completed.id, late.id, canceled.id})
@@ -61,12 +61,12 @@ class AssignmentReportTests(ReportFixtures, TestCase):
                                                                                                   now=self.now)]
             self.assertEqual(row.deadline, expected)
         archived_rows = report_rows(report_assignments(ReportFilters(state="archived", activity="all"),
-                                                      now=self.now), now=self.now)
+                                                      is_demo=True, now=self.now), now=self.now)
         self.assertEqual([row.assignment.id for row in archived_rows], [archived.id])
 
     def test_scores_show_na_without_quiz_and_dash_before_first_attempt(self):
         self.assignment("NoQuiz")
-        rows = report_rows(report_assignments(ReportFilters(), now=self.now), now=self.now)
+        rows = report_rows(report_assignments(ReportFilters(), is_demo=True, now=self.now), now=self.now)
         self.assertEqual((rows[0].latest_score, rows[0].passing_score), ("N/A", "N/A"))
         with_quiz = TrainingVersion.objects.create(training=self.training, version_number=2, title="Safety quiz")
         Quiz.objects.create(version=with_quiz, passing_percent=80)
@@ -74,20 +74,20 @@ class AssignmentReportTests(ReportFixtures, TestCase):
         with_quiz.save()
         self.version = with_quiz
         self.assignment("Quiz")
-        rows = report_rows(report_assignments(ReportFilters(), now=self.now), now=self.now)
+        rows = report_rows(report_assignments(ReportFilters(), is_demo=True, now=self.now), now=self.now)
         self.assertEqual({(row.latest_score, row.passing_score) for row in rows},
                          {("N/A", "N/A"), ("—", "—")})
 
     def test_export_uses_report_rows_and_neutralises_formula_prefixes(self):
         first = self.assignment("=HYPERLINK")
         second = self.assignment("+Phone", archived_at=self.now, canceled_at=self.now)
-        rows = list(export_rows(ReportFilters(state="all"), now=self.now, zone_name="America/New_York"))
+        rows = list(export_rows(ReportFilters(state="all"), is_demo=True, now=self.now, zone_name="America/New_York"))
         self.assertEqual([row[-1] for row in rows[1:]], [str(first.id)])
         self.assertEqual(rows[1][2], "'=HYPERLINK")
         self.assertEqual(rows[1][1], "America/New_York")
         self.assertEqual(rows[1][0], self.now.astimezone(ZoneInfo("America/New_York")).isoformat())
         archived = list(export_rows(ReportFilters(state="archived", activity="all"),
-                                    now=self.now, zone_name="UTC"))
+                                    is_demo=True, now=self.now, zone_name="UTC"))
         self.assertEqual([row[-1] for row in archived[1:]], [str(second.id)])
         self.assertEqual(archived[1][2], "'+Phone")
 

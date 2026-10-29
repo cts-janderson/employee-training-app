@@ -7,7 +7,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 from .authoring_ui import (
     quiz_errors, quiz_focus_target, quiz_workspace, record_save, saved_question_rows, submitted_question_rows,
 )
-from .dev_auth import demo_admin_required
+from .dev_auth import admin_required
 from .models import Quiz, TrainingVersion
 from .quiz_authoring import read_question_rows, removal_review, save_quiz_draft
 from .services import DraftConflict, DraftInputError, Problem
@@ -28,7 +28,7 @@ def editable_version(training_id, *, for_post):
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def quiz_editor(request, training_id):
     version = editable_version(training_id, for_post=request.method == "POST")
     quiz = Quiz.objects.filter(version=version).prefetch_related("questions__options").first()
@@ -106,7 +106,7 @@ def _quiz_conflict(request, version, submitted, threshold):
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def quiz_learner_preview(request, quiz_id):
     from .quiz_learner_views import _question_rows
 

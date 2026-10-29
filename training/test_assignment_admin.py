@@ -35,7 +35,7 @@ class AssignmentAdministrationTests(TestCase):
         self.frank = Employee.objects.create(name="Frank", email="frank@example.test", is_demo=True)
         self.now = timezone.now()
         self.today = self.now.astimezone(ZoneInfo("America/New_York")).date()
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = self.publish_version(self.training, 1, "Safety")
 
     def publish_version(self, training, number, title, *, with_quiz=False):
@@ -193,7 +193,7 @@ class AssignmentAdministrationTests(TestCase):
         self.assertEqual(AssignmentHistory.objects.count(), 0)
 
     def test_dashboard_shows_latest_and_passing_quiz_scores(self):
-        quiz_training = Training.objects.create()
+        quiz_training = Training.objects.create(is_demo=True)
         version = self.publish_version(quiz_training, 1, "Quiz training", with_quiz=True)
         assignment = self.assign(self.alice, version=version)
         self.acknowledge_all(assignment, self.alice)
@@ -214,7 +214,7 @@ class AssignmentAdministrationTests(TestCase):
         self.assertContains(detail, "Report it")
 
     def test_cancellation_preserves_failed_attempt_and_replacement_starts_fresh(self):
-        quiz_training = Training.objects.create()
+        quiz_training = Training.objects.create(is_demo=True)
         first_version = self.publish_version(quiz_training, 1, "Security", with_quiz=True)
         assignment = self.assign(self.alice, version=first_version)
         self.acknowledge_all(assignment, self.alice)

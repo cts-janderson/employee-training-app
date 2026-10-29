@@ -28,9 +28,20 @@
           <a href="{% url 'assignment_dashboard' %}" {% if request.resolver_match.url_name == 'assignment_dashboard' or request.resolver_match.url_name == 'assignment_admin_detail' %}aria-current="page"{% endif %}>Assignments</a>
           <a href="{% url 'reports' %}" {% if request.resolver_match.url_name == 'reports' or request.resolver_match.url_name == 'training_report' or request.resolver_match.url_name == 'employee_report' %}aria-current="page"{% endif %}>Reports</a>
           <a href="{% url 'notification_log' %}" {% if request.resolver_match.url_name == 'notification_log' or request.resolver_match.url_name == 'notification_detail' %}aria-current="page"{% endif %}>Notifications</a>
+          {% if not request.employee.is_demo %}
+            <a href="{% url 'account_admin' %}" {% if request.resolver_match.url_name == 'account_admin' %}aria-current="page"{% endif %}>Accounts</a>
+          {% endif %}
         {% endif %}
       </nav>
-      <div class="sidebar-footer"><span class="sidebar-footer-label">Workspace</span><a href="{% url 'demo_switch' %}" {% if request.resolver_match.url_name == 'demo_switch' %}aria-current="page"{% endif %}>Switch profile</a></div>
+      <div class="sidebar-footer"><span class="sidebar-footer-label">Workspace</span>
+        {% if request.user.is_authenticated %}
+          <a href="{% url 'account_status' %}" {% if request.resolver_match.url_name == 'account_status' %}aria-current="page"{% endif %}>Your account</a>
+          <form method="post" action="{% url 'sign_out' %}">{% csrf_token %}<button type="submit" class="text-action">Sign out</button></form>
+        {% else %}
+          <a href="{% url 'sign_in' %}" {% if request.resolver_match.url_name == 'sign_in' %}aria-current="page"{% endif %}>Sign in</a>
+          {% if demo_enabled %}<a href="{% url 'demo_switch' %}" {% if request.resolver_match.url_name == 'demo_switch' %}aria-current="page"{% endif %}>Switch profile</a>{% endif %}
+        {% endif %}
+      </div>
     </aside>
     <div class="workspace">
       <header class="topbar">

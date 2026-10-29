@@ -2,7 +2,7 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
-from .dev_auth import demo_admin_required
+from .dev_auth import admin_required
 from .models import Notification
 from .notifications import NotificationError, reconcile_notification, retry_notification
 
@@ -40,7 +40,7 @@ def _status_tone(status):
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def notification_log(request):
     status = request.GET.get("status", "all")
     if status not in {"all", *Notification.Status.values}:
@@ -49,7 +49,7 @@ def notification_log(request):
     if kind not in {"all", *Notification.Kind.values}:
         kind = "all"
     search = request.GET.get("q", "").strip()[:100]
-    base = Notification.objects.filter(assignment__employee__is_demo=True)
+    base = Notification.objects.filter(assignment__employee__is_demo=request.employee.is_demo)
     counts = base.aggregate(
         total=Count("id"),
         queued=Count("id", filter=Q(status__in=[Notification.Status.PENDING, Notification.Status.SENDING])),
@@ -88,7 +88,7 @@ def _render_detail(request, notification_id, *, error=None, status=200):
     notification = get_object_or_404(
         Notification.objects.select_related("assignment__employee", "assignment__version", "requested_by").prefetch_related(
             "delivery_attempts", "reconciliations__actor",
-        ), pk=notification_id, assignment__employee__is_demo=True,
+        ), pk=notification_id, assignment__employee__is_demo=request.employee.is_demo,
     )
     return render(request, "training/notification_detail.html", {
         "notification": notification, "error": error,
@@ -98,15 +98,15 @@ def _render_detail(request, notification_id, *, error=None, status=200):
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def notification_detail(request, notification_id):
     return _render_detail(request, notification_id)
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def retry_notification_view(request, notification_id):
-    get_object_or_404(Notification, pk=notification_id, assignment__employee__is_demo=True)
+    get_object_or_404(Notification, pk=notification_id, assignment__employee__is_demo=request.employee.is_demo)
     try:
         retry_notification(notification_id=notification_id, actor=request.employee)
     except NotificationError as exc:
@@ -115,9 +115,9 @@ def retry_notification_view(request, notification_id):
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def reconcile_notification_view(request, notification_id):
-    get_object_or_404(Notification, pk=notification_id, assignment__employee__is_demo=True)
+    get_object_or_404(Notification, pk=notification_id, assignment__employee__is_demo=request.employee.is_demo)
     try:
         reconcile_notification(
             notification_id=notification_id, actor=request.employee,

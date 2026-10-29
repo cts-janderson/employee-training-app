@@ -21,7 +21,7 @@ from .assignments import (
     progress_status,
     validate_new_due_date,
 )
-from .employees import update_demo_employee
+from .employees import update_employee
 from .models import (
     Assignment,
     AssignmentOperation,
@@ -46,7 +46,7 @@ class AssignmentWorkflowTests(TestCase):
         )
         self.alice = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
         self.bob = Employee.objects.create(name="Bob", email="bob@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = self.publish_version(1, "Safety")
         self.now = datetime(2026, 10, 26, 13, 0, tzinfo=timezone.utc)
 
@@ -195,7 +195,7 @@ class AssignmentWorkflowTests(TestCase):
 
     def test_my_training_prioritizes_overdue_unfinished_and_preserves_late_completion(self):
         upcoming = self.assign(due_date="2026-10-30")[0].assignment
-        overdue_training = Training.objects.create()
+        overdue_training = Training.objects.create(is_demo=True)
         overdue_version = TrainingVersion.objects.create(
             training=overdue_training, version_number=1, title="Overdue course",
         )
@@ -207,7 +207,7 @@ class AssignmentWorkflowTests(TestCase):
             due_date=date(2026, 10, 27), due_timezone="America/New_York",
             due_at=due_date_boundary(date(2026, 10, 27), "America/New_York"),
         )
-        finished_training = Training.objects.create()
+        finished_training = Training.objects.create(is_demo=True)
         finished_version = TrainingVersion.objects.create(
             training=finished_training, version_number=1, title="Finished course",
         )
@@ -286,7 +286,7 @@ class AssignmentWorkflowTests(TestCase):
         assignment = self.assign()[0].assignment
         slide = self.version.slides.first()
         acknowledge_slide(assignment_id=assignment.id, slide_id=slide.id, employee=self.alice, now=self.now)
-        update_demo_employee(
+        update_employee(
             employee_id=self.alice.id, name="Alice Updated", email="alice.updated@example.test",
             active=False, actor=self.admin,
         )
@@ -302,7 +302,7 @@ class AssignmentWorkflowTests(TestCase):
         session["demo_employee_id"] = str(self.alice.id)
         session.save()
         self.assertEqual(self.client.get(reverse("my_training")).status_code, 403)
-        update_demo_employee(
+        update_employee(
             employee_id=self.alice.id, name="Alice Updated", email="alice.updated@example.test",
             active=True, actor=self.admin,
         )
@@ -419,7 +419,7 @@ class AssignmentWorkflowTests(TestCase):
         self.assertEqual(self.alice.name, "Alice")
 
     def test_assignment_form_rejects_a_version_from_another_training(self):
-        other_training = Training.objects.create()
+        other_training = Training.objects.create(is_demo=True)
         other_version = TrainingVersion.objects.create(
             training=other_training, version_number=1, title="Other training",
             status=TrainingVersion.Status.PUBLISHED,
@@ -458,7 +458,7 @@ class AssignmentWorkflowTests(TestCase):
 
 class AssignmentLifecycleTests(TestCase):
     def test_outstanding_excludes_completed_and_canceled_assignments(self):
-        training = Training.objects.create()
+        training = Training.objects.create(is_demo=True)
         version = TrainingVersion.objects.create(training=training, version_number=1)
         due_at = datetime(2026, 10, 28, tzinfo=timezone.utc)
         employees = [Employee.objects.create(name=f"Employee {index}", email=f"employee{index}@example.test")

@@ -56,7 +56,8 @@ def renewal_candidates(training, *, as_of, employee_ids=None, lock=False):
         return []
 
     def read():
-        assignments = Assignment.objects.filter(training=training, employee__is_demo=True)
+        # A training's renewals stay within its own population.
+        assignments = Assignment.objects.filter(training=training, employee__is_demo=training.is_demo)
         if employee_ids is not None:
             assignments = assignments.filter(employee_id__in=employee_ids)
         return list(assignments.select_related("employee", "training")

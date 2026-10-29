@@ -15,12 +15,12 @@ from .models import Assignment, Employee, Training, TrainingVersion
 class PendingLoadChartTests(TestCase):
     def setUp(self):
         self.now = timezone.now()
-        self.safety = Training.objects.create()
+        self.safety = Training.objects.create(is_demo=True)
         self.safety_version = TrainingVersion.objects.create(
             training=self.safety, version_number=1, title="Safety",
             status=TrainingVersion.Status.PUBLISHED,
         )
-        self.privacy = Training.objects.create()
+        self.privacy = Training.objects.create(is_demo=True)
         self.privacy_version = TrainingVersion.objects.create(
             training=self.privacy, version_number=1, title="Privacy",
             status=TrainingVersion.Status.PUBLISHED,
@@ -41,7 +41,7 @@ class PendingLoadChartTests(TestCase):
         self.assignment("Carol", self.safety_version, started=True)
         self.assignment("Drew", self.privacy_version)
         self.assignment("Erin", self.privacy_version, overdue=True)
-        queryset = report_assignments(ReportFilters(), now=self.now)
+        queryset = report_assignments(ReportFilters(), is_demo=True, now=self.now)
         chart = pending_load_chart(queryset, {self.safety.id: "Safety", self.privacy.id: "Privacy"})
 
         self.assertEqual((chart["total_assignments"], chart["total_overdue"]), (5, 3))
@@ -70,7 +70,7 @@ class PendingLoadChartTests(TestCase):
     def test_chart_uses_every_matching_record_not_just_first_page(self):
         for index in range(27):
             self.assignment(f"Learner{index}", self.safety_version)
-        chart = pending_load_chart(report_assignments(ReportFilters(), now=self.now),
+        chart = pending_load_chart(report_assignments(ReportFilters(), is_demo=True, now=self.now),
                                    {self.safety.id: "Safety"})
         self.assertEqual(chart["total_assignments"], 27)
         self.assertEqual(chart["rows"][0]["total"], 27)
@@ -105,9 +105,9 @@ class PendingLoadChartTests(TestCase):
         for params, expected_ids in cases:
             with self.subTest(params=params):
                 filters = ReportFilters.from_params(params)
-                queryset = report_assignments(filters, now=self.now)
+                queryset = report_assignments(filters, is_demo=True, now=self.now)
                 chart = pending_load_chart(queryset, labels)
-                exported_ids = {row[-1] for row in list(export_rows(filters, now=self.now, zone_name="UTC"))[1:]}
+                exported_ids = {row[-1] for row in list(export_rows(filters, is_demo=True, now=self.now, zone_name="UTC"))[1:]}
                 self.assertEqual(set(queryset.values_list("id", flat=True)), expected_ids)
                 self.assertEqual(exported_ids, {str(item) for item in expected_ids})
                 self.assertEqual(sum(row["total"] for row in chart["rows"]), len(expected_ids))
@@ -139,7 +139,7 @@ class PendingLoadChartTests(TestCase):
 
     def test_top_eight_and_ties_keep_all_totals_and_full_names_in_table(self):
         for index in range(9):
-            training = Training.objects.create()
+            training = Training.objects.create(is_demo=True)
             version = TrainingVersion.objects.create(
                 training=training, version_number=1, title=f"Training with a long name {index}",
                 status=TrainingVersion.Status.PUBLISHED,
@@ -147,7 +147,7 @@ class PendingLoadChartTests(TestCase):
             self.assignment(f"Learner{index}", version)
         labels = dict(TrainingVersion.objects.filter(status=TrainingVersion.Status.PUBLISHED)
                       .values_list("training_id", "title"))
-        chart = pending_load_chart(report_assignments(ReportFilters(), now=self.now), labels)
+        chart = pending_load_chart(report_assignments(ReportFilters(), is_demo=True, now=self.now), labels)
         self.assertEqual((chart["total_rows"], len(chart["rows"]), chart["total_assignments"]), (9, 8, 9))
         self.assertEqual([row["name"] for row in chart["rows"]],
                          [f"Training with a long name {index}" for index in range(8)])

@@ -23,7 +23,8 @@ from .assignments import (
     visit_slide,
     acknowledge_slide,
 )
-from .dev_auth import demo_actor_required, demo_admin_required
+from . import population
+from .dev_auth import actor_required, admin_required
 from .models import Assignment, AssignmentOperationResult, Employee, EmployeeGroup, Quiz, Slide, Training, TrainingVersion, UNTITLED_TRAINING
 from .learning_content import units, acknowledged_ids as content_acknowledged_ids
 from .quizzes import displayed_score
@@ -45,12 +46,12 @@ def _learner_next_action(assignment, slides, acknowledged_ids, has_quiz):
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def assign_training(request, training_id):
     training = get_object_or_404(Training, pk=training_id)
     versions = list(training.versions.filter(status=TrainingVersion.Status.PUBLISHED).order_by("-version_number"))
-    employees = Employee.objects.filter(is_demo=True).order_by("name")
-    groups = EmployeeGroup.objects.order_by("name", "id")
+    employees = population.employees(request.employee).order_by("name")
+    groups = population.groups(request.employee).order_by("name", "id")
     error = None
     results = None
     review = None
@@ -125,7 +126,7 @@ def assign_training(request, training_id):
 def _assignment_review(training, versions, selected_version_id, due_date_value, recipients, operation_id):
     _, recipients = parse_recipients_request(operation_id, recipients)
     due_date, zone_name, due_at = validate_new_due_date(due_date_value)
-    resolved = recipients.resolve()
+    resolved = recipients.resolve(is_demo=training.is_demo)
     employees = [item.employee for item in resolved]
     version = next(version for version in versions if str(version.id) == selected_version_id)
     rows = []
@@ -147,7 +148,7 @@ def _assignment_review(training, versions, selected_version_id, due_date_value, 
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def change_renewal_interval(request, training_id):
     training = get_object_or_404(Training, pk=training_id)
     try:
@@ -159,7 +160,7 @@ def change_renewal_interval(request, training_id):
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def renew_training(request, training_id):
     training = get_object_or_404(Training, pk=training_id)
     versions = list(training.versions.filter(status=TrainingVersion.Status.PUBLISHED).order_by("-version_number"))
@@ -199,7 +200,7 @@ def renew_training(request, training_id):
 
 
 @require_GET
-@demo_actor_required
+@actor_required
 def my_training(request):
     assignments = list(Assignment.objects.visible_to_learner(request.employee).select_related(
         "version", "resume_slide",
@@ -236,7 +237,7 @@ def my_training(request):
 
 
 @require_GET
-@demo_actor_required
+@actor_required
 def assignment_detail(request, assignment_id):
     access = learner_access(
         assignment_id, request.employee,
@@ -267,7 +268,7 @@ def assignment_detail(request, assignment_id):
 
 
 @require_GET
-@demo_actor_required
+@actor_required
 def assignment_slide(request, assignment_id, slide_id):
     access = learner_access(assignment_id, request.employee)
     if not access.can_review:
@@ -295,7 +296,7 @@ def assignment_slide(request, assignment_id, slide_id):
 
 
 @require_POST
-@demo_actor_required
+@actor_required
 def acknowledge(request, assignment_id, slide_id):
     access = learner_access(assignment_id, request.employee)
     if access.level == LearnerAccessLevel.REVIEW:

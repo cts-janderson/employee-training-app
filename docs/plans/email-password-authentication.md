@@ -1,11 +1,11 @@
 # Email and password authentication plan
 
-**Status:** Deferred implementation  
+**Status:** Steps 1–4 implemented locally in [Slice 29](29-sign-in-skeleton.md) and [Slice 31](31-real-employee-workflows.md); step 5 remains in [production deployment](30-production-deployment.md)  
 **Date:** October 28, 2026
 
 Replace the local demo identity switcher with email and password sign-in. Employees may register themselves, subject to administrator approval; administrators may also create employee records. Keep training history attached to the existing permanent employee ID so an email change does not create a new person or transfer their records.
 
-This plan supersedes the Entra sign-in, provider account-binding, and prohibition on self-registration in the [MVP requirements](../mvp.md), [implementation baseline](../implementation-plan.md), and [stack decision](../adr/0002-application-stack.md). Implementation is future work. Existing deployment and real-data readiness gates still apply.
+This plan supersedes the Entra sign-in, provider account-binding, and prohibition on self-registration in the [MVP requirements](../mvp.md), [implementation baseline](../implementation-plan.md), and [stack decision](../adr/0002-application-stack.md). See the status above. Existing deployment and real-data readiness gates still apply.
 
 ## Confirmed decisions
 

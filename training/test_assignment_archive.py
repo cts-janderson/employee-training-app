@@ -22,7 +22,7 @@ class AssignmentArchiveTests(TestCase):
         self.employee = Employee.objects.create(
             name="Learner", email="learner@example.test", verified_email="learner@example.test", is_demo=True,
         )
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         self.slide = Slide.objects.create(version=self.version, position=1, header="Read", body="Material")
         self.version.status = TrainingVersion.Status.PUBLISHED

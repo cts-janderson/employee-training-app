@@ -12,10 +12,10 @@ class QuizWorkspaceTests(TestCase):
         self.client = Client(HTTP_HOST="localhost")
         self.admin = Employee.objects.create(name="Admin", email="admin@example.test",
             role=Employee.Role.ADMINISTRATOR, is_demo=True)
-        self.version = TrainingVersion.objects.create(training=Training.objects.create(),
+        self.version = TrainingVersion.objects.create(training=Training.objects.create(is_demo=True),
             version_number=1, title="Safety")
         Slide.objects.create(version=self.version, position=1, header="Read", body="Read carefully")
-        self.quiz = Quiz.objects.create(title="Safety check", passing_percent=75)
+        self.quiz = Quiz.objects.create(is_demo=True, title="Safety check", passing_percent=75)
         self.question = Question.objects.create(quiz=self.quiz, position=1,
             type=Question.Type.SINGLE_CHOICE, prompt="Report an incident?")
         self.yes = QuestionOption.objects.create(question=self.question, position=1, text="Yes", is_correct=True)

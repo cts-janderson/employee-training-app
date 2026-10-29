@@ -1,0 +1,16 @@
+{% extends "training/base.html" %}
+{% block title %}Register · Employee Training{% endblock %}
+{% block content %}
+  <h1>Register</h1>
+  <p class="muted">An administrator reviews each application after you confirm your email address.</p>
+  {% if error %}<p class="error" role="alert"><a href="#register-{{ error_field }}">{{ error }}</a></p>{% endif %}
+  <form class="card stack" method="post">
+    {% csrf_token %}
+    <div><label for="register-name">Name</label><input id="register-name" name="name" value="{{ form_name }}" required maxlength="200" autocomplete="name" {% if error_field == "name" %}aria-invalid="true" aria-describedby="register-error"{% endif %}></div>
+    <div><label for="register-email">Email</label><input id="register-email" name="email" type="email" value="{{ form_email }}" required autocomplete="email" {% if error_field == "email" %}aria-invalid="true" aria-describedby="register-error"{% endif %}></div>
+    <div><label for="register-password">Password</label><input id="register-password" name="password" type="password" required minlength="12" autocomplete="new-password" {% if error_field == "password" %}aria-invalid="true" aria-describedby="register-error"{% endif %}></div>
+    {% if error %}<p class="field-error" id="register-error">{{ error }}</p>{% endif %}
+    <div><button type="submit">Register</button></div>
+  </form>
+  <p><a href="{% url 'sign_in' %}">Already registered? Sign in</a></p>
+{% endblock %}

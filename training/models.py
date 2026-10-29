@@ -1,28 +1,65 @@
 import uuid
 
+from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Case, CharField, F, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 
-class Employee(models.Model):
+class Employee(AbstractBaseUser):
     class Role(models.TextChoices):
         ADMINISTRATOR = "administrator", "Administrator"
         EMPLOYEE = "employee", "Employee"
+
+    class Approval(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
     email = models.EmailField()
     verified_email = models.EmailField(blank=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
     is_active = models.BooleanField(default=True)
     is_demo = models.BooleanField(default=False)
+    approval_status = models.CharField(max_length=10, choices=Approval.choices, default=Approval.APPROVED)
+    approval_decided_at = models.DateTimeField(null=True, blank=True)
+    approval_decided_by = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True,
+                                            related_name="approval_decisions")
+    # Bumped whenever a verification, setup or reset link is sent, so earlier links stop working.
+    link_generation = models.PositiveIntegerField(default=0)
+    # Bumped on deactivation, so sessions from before it stay dead after reactivation.
+    session_version = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Email uniqueness is the case-insensitive constraint below; see ADR-0009.
+    USERNAME_FIELD = "email"
+    EMAIL_FIELD = "email"
+    REQUIRED_FIELDS = ["name"]
 
     class Meta:
         constraints = [models.UniqueConstraint(Lower("email"), name="employee_email_ci_unique")]
+
+    def save(self, *args, **kwargs):
+        # Demo and invited employees have no password until one is set through an account link.
+        if not self.password:
+            self.set_unusable_password()
+        super().save(*args, **kwargs)
+
+    @property
+    def email_is_verified(self):
+        return bool(self.verified_email) and self.verified_email.lower() == self.email.lower()
+
+    def _get_session_auth_hash(self, secret=None):
+        # Covers the current and fallback hashes, which Django derives from this method.
+        key_salt = "django.contrib.auth.models.AbstractBaseUser.get_session_auth_hash"
+        return salted_hmac(key_salt, f"{self.password}:{self.session_version}",
+                           secret=secret, algorithm="sha256").hexdigest()
 
     def __str__(self):
         return self.name
@@ -50,6 +87,8 @@ class Training(models.Model):
     objects = TrainingQuerySet.as_manager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     renewal_interval_months = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Demo and real administrators keep separate libraries; see docs/plans/31-real-employee-workflows.md.
+    is_demo = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -174,6 +213,8 @@ class Quiz(VersionContent):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     version = models.OneToOneField(TrainingVersion, on_delete=models.PROTECT, related_name="quiz", null=True, blank=True)
     title = models.CharField(max_length=200, blank=True)
+    # Scopes library quizzes (no version) to demo or real administrators.
+    is_demo = models.BooleanField(default=False)
     revision = models.PositiveIntegerField(default=0)
     passing_percent = models.PositiveSmallIntegerField(null=True, blank=True)
 
@@ -522,10 +563,11 @@ class AssignmentOperation(models.Model):
 class EmployeeGroup(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
+    is_demo = models.BooleanField(default=False)
     created_at = models.DateTimeField()
 
     class Meta:
-        constraints = [models.UniqueConstraint(Lower("name"), name="employee_group_name_ci_unique")]
+        constraints = [models.UniqueConstraint(Lower("name"), "is_demo", name="employee_group_name_ci_unique")]
 
 
 class EmployeeGroupMembership(models.Model):

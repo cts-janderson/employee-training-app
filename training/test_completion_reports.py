@@ -19,7 +19,7 @@ class CompletionReportsTests(TestCase):
         self.admin = Employee.objects.create(name="Admin", email="admin@example.test", is_demo=True,
                                              role="administrator")
         self.employee = Employee.objects.create(name="=Morgan", email="morgan@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = self.publish(self.training, "Safety", 1)
 
     def publish(self, training, title, number):
@@ -38,7 +38,7 @@ class CompletionReportsTests(TestCase):
 
     def query(self, **params):
         scope = CompletionRequest.parse(params)
-        return scope, population(scope, now=self.now)
+        return scope, population(scope, is_demo=True, now=self.now)
 
     def test_population_preserves_cycles_and_excludes_exceptions_inactive_and_real_people(self):
         done = self.assignment(completed_at=self.now, cycle_number=1)
@@ -61,17 +61,17 @@ class CompletionReportsTests(TestCase):
             self.assertIsNone(totals(history, history_scope)["rate"])
 
     def test_empty_entities_are_retained_without_search_and_drafts_are_excluded(self):
-        draft = Training.objects.create()
+        draft = Training.objects.create(is_demo=True)
         TrainingVersion.objects.create(training=draft, version_number=1, title="Draft")
         scope, assignments = self.query()
-        rows = list(summaries(assignments, scope))
+        rows = list(summaries(assignments, scope, is_demo=True))
         self.assertEqual([row.pk for row in rows], [self.training.pk])
         self.assertEqual(rows[0].total, 0)
         self.assertIsNone(rows[0].rate)
         scope, assignments = self.query(q="missing")
-        self.assertEqual(list(summaries(assignments, scope)), [])
+        self.assertEqual(list(summaries(assignments, scope, is_demo=True)), [])
         scope, assignments = self.query(view="employee")
-        self.assertEqual(summaries(assignments, scope).count(), 2)
+        self.assertEqual(summaries(assignments, scope, is_demo=True).count(), 2)
 
     def test_summary_counts_do_not_multiply_acknowledgments_or_quiz_attempts(self):
         # Attempts are evidence, never extra assignment cycles.
@@ -80,7 +80,7 @@ class CompletionReportsTests(TestCase):
             AssignmentSlideProgress.objects.create(assignment=assignment, slide=slide, acknowledged_at=self.now)
         scope, assignments = self.query()
         with self.assertNumQueries(1):
-            row = list(summaries(assignments, scope))[0]
+            row = list(summaries(assignments, scope, is_demo=True))[0]
         self.assertEqual((row.total, row.completed, row.employees, row.rate), (1, 1, 1, 100))
         self.assertEqual(evidence(assignments).get().acknowledged, 2)
 
@@ -92,7 +92,7 @@ class CompletionReportsTests(TestCase):
         rows = slide_summaries(assignments, self.version.pk)
         self.assertEqual([(r["acknowledged"], r["total"]) for r in rows], [(1, 1), (0, 1)])
         scope = CompletionRequest.parse({"version": str(self.version.pk), "slide": str(slides[0].pk)}, training=self.training)
-        self.assertEqual(evidence(population(scope, now=self.now, training=self.training)).get().slide_total, 2)
+        self.assertEqual(evidence(population(scope, is_demo=True, now=self.now, training=self.training)).get().slide_total, 2)
         other = self.publish(self.training, "Safety new", 2)
         self.assertTrue(all(row["acknowledged"] == 0 for row in slide_summaries(assignments, other.pk)))
 
@@ -101,13 +101,13 @@ class CompletionReportsTests(TestCase):
                        {"tab": "slide"}, {"version": str(self.version.pk)}):
             with self.assertRaises(ReportFilterError):
                 CompletionRequest.parse(params)
-        other = Training.objects.create()
+        other = Training.objects.create(is_demo=True)
         with self.assertRaises(ReportFilterError):
             CompletionRequest.parse({"version": str(self.version.pk)}, training=other)
 
     def test_overview_totals_and_export_include_beyond_page_one(self):
         for index in range(27):
-            training = Training.objects.create()
+            training = Training.objects.create(is_demo=True)
             version = self.publish(training, f"Course {index:02}", 1)
             self.assignment(version=version, completed_at=self.now if index < 18 else None)
         response = self.client.get(reverse("reports"))
@@ -243,12 +243,12 @@ class CompletionReportsTests(TestCase):
     def test_sort_uses_actual_rates_and_stable_names(self):
         first = self.assignment(completed_at=self.now)
         self.assignment(renews=first, cycle_number=2)
-        other = Training.objects.create()
+        other = Training.objects.create(is_demo=True)
         version = self.publish(other, "Alpha", 1)
         self.assignment(version=version, completed_at=self.now)
         scope, assignments = self.query(sort="-rate")
-        self.assertEqual([row.pk for row in summaries(assignments, scope)], [other.pk, self.training.pk])
+        self.assertEqual([row.pk for row in summaries(assignments, scope, is_demo=True)], [other.pk, self.training.pk])
         scope, assignments = self.query(sort="rate")
-        self.assertEqual([row.pk for row in summaries(assignments, scope)], [self.training.pk, other.pk])
+        self.assertEqual([row.pk for row in summaries(assignments, scope, is_demo=True)], [self.training.pk, other.pk])
         response = self.client.get(reverse("training_list"), {"sort": "-title"})
         self.assertEqual([row["training"].pk for row in response.context["rows"]], [self.training.pk, other.pk])

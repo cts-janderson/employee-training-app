@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import ImportBatch, OutlineItem, Slide
+from .population import is_administrator
 from .services import create_training, save_draft
 
 MAX_FILE_BYTES = 1024 * 1024
@@ -128,7 +129,7 @@ def update_batch(*, batch_id, owner, revision, titles, remove=None, commit=False
     now = now or timezone.now()
     with transaction.atomic():
         batch = ImportBatch.objects.select_for_update().get(pk=batch_id, owner=owner)
-        if not owner.is_demo or not owner.is_active or owner.role != owner.Role.ADMINISTRATOR:
+        if not is_administrator(owner):
             raise ImportInputError("Administrator access is required.")
         if batch.committed_at:
             return batch
@@ -152,7 +153,7 @@ def update_batch(*, batch_id, owner, revision, titles, remove=None, commit=False
             for item in plan:
                 if item.get("content_format") == "documents":
                     from .documents import edit_outline
-                    training = create_training(content_format="documents")
+                    training = create_training(is_demo=owner.is_demo, content_format="documents")
                     version = training.versions.get()
                     for index, document in enumerate(item["documents"], 1):
                         OutlineItem.objects.create(version=version, kind="document", position=index,
@@ -160,7 +161,7 @@ def update_batch(*, batch_id, owner, revision, titles, remove=None, commit=False
                     edit_outline(version_id=version.pk, revision=0, action="settings", training_title=item["title"])
                     results.append(str(training.pk))
                     continue
-                training = create_training()
+                training = create_training(is_demo=owner.is_demo)
                 version = training.versions.get()
                 # Establish slide IDs, then use the same validated save service as the editor.
                 slides = [Slide(version=version, position=index, **slide) for index, slide in enumerate(item["slides"], 1)]

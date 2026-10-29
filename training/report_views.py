@@ -14,19 +14,19 @@ from .assignment_reports import ReportFilterError, _spreadsheet_safe, report_row
 from .browsing import browse
 from .completion_reports import (ACTIVITIES, MODES, SORTS, CompletionRequest, evidence,
                                  population, slide_summaries, document_summaries, summaries, totals)
-from .dev_auth import demo_admin_required
+from .dev_auth import admin_required
 from .models import Employee, Training
 
 
 def _report(request, *, training_id=None, employee_id=None, export=False):
     training = get_object_or_404(Training.objects.with_display_title(), pk=training_id) if training_id else None
-    employee = get_object_or_404(Employee, pk=employee_id, is_demo=True) if employee_id else None
+    employee = get_object_or_404(Employee, pk=employee_id) if employee_id else None
     now = timezone.now()
     try:
         scope = CompletionRequest.parse(request.GET, training=training, employee=employee)
     except ReportFilterError as exc:
         return render(request, "training/reports.html", {"error": str(exc)}, status=400)
-    assignments = population(scope, now=now, training=training, employee=employee)
+    assignments = population(scope, is_demo=request.employee.is_demo, now=now, training=training, employee=employee)
     summary = totals(assignments, scope)
     detail = training is not None or employee is not None
     data = None
@@ -38,7 +38,7 @@ def _report(request, *, training_id=None, employee_id=None, export=False):
         data = evidence(assignments)
         label, export_label = "assignments", "Export assignments CSV"
     else:
-        data = summaries(assignments, scope)
+        data = summaries(assignments, scope, is_demo=request.employee.is_demo)
         label = "trainings" if scope.view == "training" else "employees"
         export_label = f"Export {scope.view} summary CSV"
     if export:
@@ -139,36 +139,36 @@ def _assignment_export_rows(data, *, now):
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def reports(request):
     return _report(request)
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def reports_export(request):
     return _report(request, export=True)
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def training_report(request, training_id):
     return _report(request, training_id=training_id)
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def training_report_export(request, training_id):
     return _report(request, training_id=training_id, export=True)
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def employee_report(request, employee_id):
     return _report(request, employee_id=employee_id)
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def employee_report_export(request, employee_id):
     return _report(request, employee_id=employee_id, export=True)

@@ -1,0 +1,15 @@
+{% extends "training/base.html" %}
+{% block title %}Sign in · Employee Training{% endblock %}
+{% block content %}
+  <h1>Sign in</h1>
+  {% if limited %}<p class="error" role="alert">Too many sign-in attempts. Wait a while and try again.</p>{% endif %}
+  {% if form.non_field_errors %}<p class="error" role="alert">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+  <form class="card stack" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div><label for="sign-in-email">Email</label><input id="sign-in-email" name="username" type="email" value="{{ form.username.value|default:'' }}" autocomplete="username" required autofocus></div>
+    <div><label for="sign-in-password">Password</label><input id="sign-in-password" name="password" type="password" autocomplete="current-password" required></div>
+    <div><button type="submit">Sign in</button></div>
+  </form>
+  <p><a href="{% url 'password_reset' %}">Forgot your password?</a> · <a href="{% url 'register' %}">Register</a></p>
+{% endblock %}

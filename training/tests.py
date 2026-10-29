@@ -347,7 +347,8 @@ class AuthoringWorkflowTests(TestCase):
         self.assertEqual(self.client.get(url).status_code, 200)
         self.assertEqual(self.client.get(url, REMOTE_ADDR="192.0.2.4").status_code, 403)
         with override_settings(DEBUG=False):
-            self.assertEqual(self.client.get(url).status_code, 403)
+            self.assertRedirects(self.client.get(url), f"{reverse('sign_in')}?next={url}",
+                                 fetch_redirect_response=False)
         self.admin.role = Employee.Role.EMPLOYEE
         self.admin.save()
         self.assertEqual(self.client.get(url).status_code, 403)

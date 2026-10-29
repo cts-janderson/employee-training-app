@@ -1,0 +1,20 @@
+{% extends "training/base.html" %}
+{% block title %}Your account · Employee Training{% endblock %}
+{% block content %}
+  <h1>Your account</h1>
+  {% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+  <div class="card stack">
+    <p><strong>{{ request.user.name }}</strong><br>{{ request.user.email }}</p>
+    {% if state == states.UNVERIFIED %}
+      <p>Confirm your email address to continue. We sent a link when you registered.</p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="resend_verification"><button type="submit">Send a new link</button></form>
+    {% elif state == states.PENDING %}
+      <p>Your application is waiting for an administrator's approval.</p>
+    {% elif state == states.REJECTED %}
+      <p>Your application wasn't approved. Contact an administrator if you think this is a mistake.</p>
+    {% else %}
+      <p>Your account is active. <a href="{% url 'home' %}">Go to your training</a></p>
+    {% endif %}
+  </div>
+  <p><a href="{% url 'password_change' %}">Change password</a></p>
+{% endblock %}

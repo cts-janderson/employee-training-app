@@ -1,0 +1,7 @@
+Hello {{ employee.name }},
+
+Someone tried to register for Employee Training with this email address, which already has an account. Nothing about your account has changed.
+
+Sign in or reset your password here: {{ link }}
+
+If an administrator invited you, use the setup link from that invitation.

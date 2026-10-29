@@ -20,21 +20,21 @@ class TrainingDisplayTitleTests(TestCase):
 
     def test_annotation_prefers_newest_published_then_draft_then_fallback(self):
         cases = []
-        first = Training.objects.create()
+        first = Training.objects.create(is_demo=True)
         self.version(first, 1, "Published one", TrainingVersion.Status.PUBLISHED)
         self.version(first, 2, "Draft two", TrainingVersion.Status.DRAFT)
         cases.append((first, "Published one"))
-        second = Training.objects.create()
+        second = Training.objects.create(is_demo=True)
         self.version(second, 1, "Published one", TrainingVersion.Status.PUBLISHED)
         self.version(second, 2, "Published two", TrainingVersion.Status.PUBLISHED)
         cases.append((second, "Published two"))
-        third = Training.objects.create()
+        third = Training.objects.create(is_demo=True)
         self.version(third, 1, "Draft only", TrainingVersion.Status.DRAFT)
         cases.append((third, "Draft only"))
-        fourth = Training.objects.create()
+        fourth = Training.objects.create(is_demo=True)
         self.version(fourth, 1, "", TrainingVersion.Status.DRAFT)
         cases.append((fourth, UNTITLED_TRAINING))
-        fifth = Training.objects.create()
+        fifth = Training.objects.create(is_demo=True)
         self.version(fifth, 1, "Published", TrainingVersion.Status.PUBLISHED)
         self.version(fifth, 2, "", TrainingVersion.Status.DRAFT)
         cases.append((fifth, "Published"))
@@ -44,7 +44,7 @@ class TrainingDisplayTitleTests(TestCase):
 
     def test_training_list_uses_annotation_and_case_insensitive_order(self):
         for title in ("Zeta", "", "alpha"):
-            training = Training.objects.create()
+            training = Training.objects.create(is_demo=True)
             self.version(training, 1, title, TrainingVersion.Status.DRAFT)
         response = self.client.get(reverse("training_list"))
         self.assertEqual(response.status_code, 200)
@@ -57,7 +57,7 @@ class TrainingDisplayTitleTests(TestCase):
     def test_dashboard_menu_and_both_charts_use_display_titles(self):
         now = timezone.now()
         for index, title in enumerate(("Zeta", "alpha"), 1):
-            training = Training.objects.create()
+            training = Training.objects.create(is_demo=True)
             version = self.version(training, 1, title, TrainingVersion.Status.DRAFT)
             Quiz.objects.create(version=version, passing_percent=80)
             version.status = TrainingVersion.Status.PUBLISHED

@@ -45,11 +45,11 @@ def _locked_draft(version_id, expected_revision, *, stale_message):
     return version
 
 
-def create_training(*, content_format="slides"):
+def create_training(*, is_demo, content_format="slides"):
     if content_format not in {"slides", "documents"}:
         raise DraftInputError("Choose a supported content format.")
     with transaction.atomic():
-        training = Training.objects.create()
+        training = Training.objects.create(is_demo=is_demo)
         TrainingVersion.objects.create(training=training, version_number=1, content_format=content_format)
         return training
 
@@ -94,7 +94,8 @@ def create_revision(training_id, *, content_format=None):
 
 
 def copy_quiz(source, version):
-    copied = Quiz.objects.create(version=version, title=source.title, passing_percent=source.passing_percent)
+    copied = Quiz.objects.create(version=version, is_demo=version.training.is_demo,
+                                 title=source.title, passing_percent=source.passing_percent)
     for question in source.questions.prefetch_related("options"):
         copied_question = Question.objects.create(
             quiz=copied, position=question.position, type=question.type, prompt=question.prompt,
@@ -119,6 +120,8 @@ def attach_library_quiz(*, version_id, quiz_id, expected_version_revision, expec
         source = _locked_library_quiz(
             quiz_id, expected_quiz_revision, stale_message="The library quiz changed after attachment review.",
         )
+        if source.is_demo != version.training.is_demo:
+            raise DraftInputError("Choose a library quiz from your own library.")
         if library_quiz_problems(source):
             raise DraftInputError("The library quiz needs corrections before it can be attached.")
         current = Quiz.objects.filter(version=version).first()

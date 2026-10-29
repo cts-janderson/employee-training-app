@@ -144,7 +144,7 @@ def request_manual_nudge(*, assignment_id, actor, now=None):
     now = now or timezone.now()
     with transaction.atomic():
         assignment = Assignment.objects.select_for_update().select_related("employee").get(
-            pk=assignment_id, employee__is_demo=True,
+            pk=assignment_id, employee__is_demo=actor.is_demo,
         )
         problem = manual_nudge_problem(assignment)
         if problem:
@@ -266,7 +266,10 @@ def _suppression_reason(notification, assignment, *, now=None):
 def _verified_recipient(employee):
     email = employee.email.strip().lower()
     verified = employee.verified_email.strip().lower()
-    if not email or email != verified or not employee.is_demo or not email.endswith(".test"):
+    if not email or email != verified:
+        return None
+    # Demo employees may only receive mail at reserved .test addresses.
+    if employee.is_demo and not email.endswith(".test"):
         return None
     return email
 
@@ -432,7 +435,8 @@ def retry_notification(*, notification_id, actor, now=None):
     _administrator(actor)
     now = now or timezone.now()
     with transaction.atomic():
-        assignment_id = Notification.objects.values_list("assignment_id", flat=True).get(pk=notification_id)
+        assignment_id = Notification.objects.values_list("assignment_id", flat=True).get(
+            pk=notification_id, assignment__employee__is_demo=actor.is_demo)
         assignment = Assignment.objects.select_for_update().select_related("employee").get(pk=assignment_id)
         notification = Notification.objects.select_for_update().get(pk=notification_id)
         if notification.status not in {Notification.Status.BLOCKED, Notification.Status.EXHAUSTED}:
@@ -450,7 +454,8 @@ def reconcile_notification(*, notification_id, actor, decision, reason, now=None
         raise NotificationError("Choose a reconciliation outcome and enter a reason of at most 1000 characters.")
     now = now or timezone.now()
     with transaction.atomic():
-        assignment_id = Notification.objects.values_list("assignment_id", flat=True).get(pk=notification_id)
+        assignment_id = Notification.objects.values_list("assignment_id", flat=True).get(
+            pk=notification_id, assignment__employee__is_demo=actor.is_demo)
         assignment = Assignment.objects.select_for_update().select_related("employee").get(pk=assignment_id)
         notification = Notification.objects.select_for_update().get(pk=notification_id)
         if notification.status != Notification.Status.AMBIGUOUS:

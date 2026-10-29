@@ -117,9 +117,12 @@ A named reference, such as a policy or example, that a training version offers f
 _Avoid_: Attachment, resource, slide
 
 **Administrator**:
-An employee authorized to manage training, employees, assignments, and results across the organization, who may also receive training assignments.
+An employee authorized to manage training, employees, assignments, and results within their population, who may also receive training assignments.
 _Avoid_: Separate administrator identity
 
+**Population**:
+One of two separate sets of employees, with the trainings, library quizzes, groups and evidence that belong to them: the real organization, or synthetic demonstration data. An administrator works within exactly one population.
+_Avoid_: Environment, tenant, workspace, sandbox
 
 **Document**:
 A titled, continuous unit of learning content within a training; its acknowledgment is required for assignment completion.

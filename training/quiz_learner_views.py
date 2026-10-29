@@ -8,7 +8,7 @@ from django.utils import timezone
 from .assignments import (
     AssignmentAccessError, LearnerDenial, assignment_status, learner_access, slides_acknowledged,
 )
-from .dev_auth import demo_actor_required
+from .dev_auth import actor_required
 from .models import Assignment, Quiz, QuizAttempt
 from .quizzes import QuizSubmissionError, displayed_score, presentation_options, submit_quiz, submitted_answer_rows
 
@@ -87,7 +87,7 @@ def _refused_submission(request, access):
 
 
 @require_GET
-@demo_actor_required
+@actor_required
 def take_quiz(request, assignment_id):
     access = learner_access(
         assignment_id, request.employee, queryset=Assignment.objects.select_related("version"),
@@ -106,7 +106,7 @@ def take_quiz(request, assignment_id):
 
 
 @require_POST
-@demo_actor_required
+@actor_required
 def submit_quiz_view(request, assignment_id):
     access = learner_access(
         assignment_id, request.employee, queryset=Assignment.objects.select_related("version"),
@@ -170,7 +170,7 @@ def submit_quiz_view(request, assignment_id):
 
 
 @require_GET
-@demo_actor_required
+@actor_required
 def quiz_result(request, assignment_id, attempt_id):
     access = learner_access(assignment_id, request.employee)
     if not access.can_review:

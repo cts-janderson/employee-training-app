@@ -36,7 +36,21 @@ export DJANGO_DEBUG=1 DEV_AUTH_STUB=1
 
 Use the startup script for normal local use: it also sets `DJANGO_ALLOWED_HOSTS` to loopback values. To use the manual commands, retain the default allowed hosts or set them to `localhost,127.0.0.1`. The demo stub is rejected if debug is off or allowed hosts include a non-loopback host.
 
-## Seed and explore
+## Try email and password sign-in
+
+Sign-in, registration, approval, invitations and password reset work locally without an email provider ([Slice 29](plans/29-sign-in-skeleton.md)). Account emails go to Django's in-memory sink. With the demo stub enabled, each link is also printed in the `runserver` output as `Local verify link …`, `Local setup link …` or `Local reset link …`.
+
+1. Create the first real administrator. It prompts for a password of at least 12 characters and refuses once a real administrator exists:
+
+   ```bash
+   .venv/bin/python manage.py create_administrator --name "Local Admin" --email admin@example.com
+   ```
+
+2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`) and use the other administrator pages with real employees. Real and demo administrators don't see each other's employees, trainings, library quizzes or groups; see [Slice 31](plans/31-real-employee-workflows.md). Apply migration `0017` first. To work with demo data, sign out and use **Switch profile**.
+3. Register a second address at `/account/register/`, open the printed verify link, then approve the application from **Accounts**.
+
+Real accounts can't use the demo switcher, and demo profiles can't sign in with a password.
+
 
 Apply migrations first, then run:
 

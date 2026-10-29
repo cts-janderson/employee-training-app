@@ -1,10 +1,12 @@
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .employees import is_administrator
 from .models import Employee, EmployeeGroup, EmployeeGroupChange, EmployeeGroupMembership
+from .population import assignable, groups as groups_in
 
 
 class GroupInputError(ValueError):
@@ -25,13 +27,20 @@ def _name(value):
     return name
 
 
+def _locked_group(actor, group_id):
+    try:
+        return groups_in(actor).select_for_update().get(pk=group_id)
+    except (EmployeeGroup.DoesNotExist, ValidationError, ValueError):
+        raise GroupInputError("Choose a valid employee group.") from None
+
+
 def create_group(*, name, actor, now=None):
     _require_admin(actor)
     name = _name(name)
     now = now or timezone.now()
     try:
         with transaction.atomic():
-            group = EmployeeGroup.objects.create(name=name, created_at=now)
+            group = EmployeeGroup.objects.create(name=name, is_demo=actor.is_demo, created_at=now)
             EmployeeGroupChange.objects.create(group=group, actor=actor, kind=EmployeeGroupChange.Kind.CREATED,
                                                new_name=name, occurred_at=now)
             return group
@@ -45,7 +54,7 @@ def rename_group(*, group_id, name, actor, now=None):
     now = now or timezone.now()
     try:
         with transaction.atomic():
-            group = EmployeeGroup.objects.select_for_update().get(pk=group_id)
+            group = _locked_group(actor, group_id)
             if group.name != name:
                 old_name = group.name
                 group.name = name
@@ -65,13 +74,12 @@ def set_group_members(*, group_id, employee_ids, actor, now=None):
     except (ValueError, TypeError):
         raise GroupInputError("Choose valid employees.", target=("members",)) from None
     with transaction.atomic():
-        group = EmployeeGroup.objects.select_for_update().get(pk=group_id)
+        group = _locked_group(actor, group_id)
         current = {item.employee_id: item for item in group.memberships.select_related("employee")}
         additions = ids - current.keys()
-        eligible = list(Employee.objects.select_for_update().filter(
-            pk__in=additions, is_demo=True, is_active=True).order_by("pk"))
+        eligible = list(assignable(actor).select_for_update().filter(pk__in=additions).order_by("pk"))
         if len(eligible) != len(additions):
-            raise GroupInputError("Only active demo employees can be added.", target=("members",))
+            raise GroupInputError("Only active employees can be added.", target=("members",))
         for item in list(current.values()):
             if item.employee_id not in ids:
                 item.delete()

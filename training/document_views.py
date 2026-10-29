@@ -8,7 +8,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .assignments import AssignmentAccessError, learner_access, visit_document
 from .authoring_ui import record_save
-from .dev_auth import demo_actor_required, demo_admin_required
+from .dev_auth import actor_required, admin_required
 from .documents import convert_draft, descendants, edit_outline, outline, plain_body
 from .learning_content import acknowledged_ids, units
 from .models import OutlineItem, TrainingVersion
@@ -75,7 +75,7 @@ def document_editor(request, version, *, material_error=None, material_rows=None
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def convert_documents(request, training_id):
     version = get_object_or_404(TrainingVersion, training_id=training_id, status="draft")
     try:
@@ -88,7 +88,7 @@ def convert_documents(request, training_id):
 
 
 @require_GET
-@demo_actor_required
+@actor_required
 def assignment_document(request, assignment_id, document_id):
     access = learner_access(assignment_id, request.employee)
     if not access.can_review:
@@ -118,7 +118,7 @@ def assignment_document(request, assignment_id, document_id):
 
 
 @require_POST
-@demo_actor_required
+@actor_required
 def acknowledge_document(request, assignment_id, document_id):
     access = learner_access(assignment_id, request.employee)
     if not access.can_review:

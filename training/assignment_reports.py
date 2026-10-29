@@ -11,6 +11,7 @@ from .assignments import DEADLINE_LABELS, PROGRESS_LABELS, assignment_status
 from .admin_chart import pending_load_chart
 from .models import Assignment, Employee, Ending, QuizAttempt, Training
 from .notifications import follow_up_summaries
+from .population import employees as employees_in, trainings as trainings_in
 from .quiz_outcomes_chart import quiz_outcomes_chart
 from .quizzes import displayed_score, quiz_record
 
@@ -108,14 +109,14 @@ def dashboard_request(params):
     return DashboardRequest(mode, filters, None, filters.as_params())
 
 
-def dashboard_report(dashboard, assignments, page_rows, *, now):
+def dashboard_report(dashboard, assignments, page_rows, *, is_demo, now):
     """Build the dashboard context from a filtered query and the current page."""
     filters = dashboard.form_values
     rows = [{"assignment": row.assignment, "state": row.state, "progress": row.progress,
              "deadline": row.deadline, "latest_score": row.latest_score,
              "passing_score": row.passing_score} for row in page_rows]
-    employees = Employee.objects.filter(is_demo=True).order_by("name")
-    trainings = Training.objects.filter(assignments__isnull=False).distinct().with_display_title().order_by(
+    employees = employees_in(is_demo).order_by("name")
+    trainings = trainings_in(is_demo).filter(assignments__isnull=False).distinct().with_display_title().order_by(
         Lower("display_title"), "id",
     )
     training_rows = []
@@ -165,8 +166,8 @@ def dashboard_report(dashboard, assignments, page_rows, *, now):
     }
 
 
-def report_assignments(filters, *, now):
-    assignments = Assignment.objects.filter(employee__is_demo=True).with_status(now=now).select_related(
+def report_assignments(filters, *, is_demo, now):
+    assignments = Assignment.objects.filter(employee__is_demo=is_demo).with_status(now=now).select_related(
         "employee", "training", "version", "version__quiz",
     ).prefetch_related(Prefetch("quiz_attempts", queryset=QuizAttempt.objects.order_by("submitted_at")))
     assignments = assignments.filter(archived_at__isnull=filters.state != "archived")
@@ -196,10 +197,10 @@ def report_assignments(filters, *, now):
     )).order_by("report_rank", "due_at", "assigned_at", "id")
 
 
-def quiz_outcome_assignments(filters, *, now):
+def quiz_outcome_assignments(filters, *, is_demo, now):
     """Use the shared people, training, and search filters across quiz cycles."""
     scope = replace(filters, **QUIZ_OUTCOME_SCOPE)
-    return report_assignments(scope, now=now).filter(
+    return report_assignments(scope, is_demo=is_demo, now=now).filter(
         Q(ending_value__isnull=True) | Q(ending_value=Ending.COMPLETED),
         version__quiz__isnull=False,
     )
@@ -247,11 +248,11 @@ def _spreadsheet_safe(value):
     return f"'{value}" if value.startswith(("=", "+", "-", "@", "\t", "\r")) else value
 
 
-def export_rows(filters, *, now, zone_name):
+def export_rows(filters, *, is_demo, now, zone_name):
     zone = ZoneInfo(zone_name)
     generated_at = now.astimezone(zone).isoformat()
     yield list(EXPORT_COLUMNS)
-    assignments = report_assignments(filters, now=now).iterator(chunk_size=500)
+    assignments = report_assignments(filters, is_demo=is_demo, now=now).iterator(chunk_size=500)
     while batch := list(islice(assignments, 500)):
         for row in report_rows(batch, now=now):
             assignment = row.assignment
