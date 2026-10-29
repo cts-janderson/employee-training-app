@@ -172,7 +172,8 @@
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 30000);
     try {
-      const endpoint = new URL(form.action || window.location.href, window.location.href);
+      // Read the attribute: buttons named "action" shadow form.action in browsers.
+      const endpoint = new URL(form.getAttribute("action") || window.location.href, window.location.href);
       const response = await window.fetch(endpoint.href, {
         method:"POST", body:data, signal:controller.signal, credentials:"same-origin", headers:{Accept:"text/html"},
       });

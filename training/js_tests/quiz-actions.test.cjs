@@ -56,6 +56,18 @@ test("Add option is handled without navigation or losing the current scroll posi
   f.dom.window.close();
 });
 
+test("buttons named action do not change the request URL",async()=>{
+  const f=setup();
+  // Browsers expose a control named "action" as form.action; jsdom does not, so mirror that here.
+  const form=f.document.getElementById("editor-form");
+  Object.defineProperty(form,"action",{get:()=>form.elements.namedItem("action")});
+  f.submit("add_option:q1");await f.settle();
+  assert.equal(f.calls.length,1);
+  assert.equal(f.calls[0][0],"http://localhost/quizzes/q/edit/");
+  assert.ok(f.document.getElementById("option-new"));
+  f.dom.window.close();
+});
+
 function response(html, status=200) {
   return {status,headers:{get:()=>"text/html; charset=utf-8"},url:"http://localhost/quizzes/q/edit/",text:async()=>html};
 }
