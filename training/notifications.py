@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .employees import is_administrator
+from .mail import AmbiguousMailError, GraphMailSender, PermanentMailError, TransientMailError
 from .models import (
     Assignment, EmployeeActivityChange, Notification, NotificationDeliveryAttempt,
     NotificationReconciliation,
@@ -32,8 +33,9 @@ class ManualNudgeRateLimited(NotificationError):
 
 
 class TransientDeliveryError(NotificationError):
-    def __init__(self, code="temporary_failure"):
+    def __init__(self, code="temporary_failure", retry_after=None):
         self.code = code
+        self.retry_after = retry_after
 
 
 class PermanentDeliveryError(NotificationError):
@@ -55,6 +57,30 @@ class LocalEmailSink:
         EmailMessage(subject=subject, body=body, from_email=settings.DEFAULT_FROM_EMAIL,
                      to=[recipient], headers={"X-Training-Delivery-Key": str(delivery_key)}).send()
         return f"local-sink:{delivery_key}"
+
+
+class GraphNotificationSender:
+    """Translate Graph outcomes into the delivery errors the retry and reconciliation flow expects."""
+
+    def __init__(self, mail_sender=None):
+        self.mail_sender = mail_sender or GraphMailSender()
+
+    def send(self, *, delivery_key, recipient, subject, body):
+        if recipient.endswith(".test"):
+            raise PermanentDeliveryError("reserved_test_address")
+        try:
+            return self.mail_sender.send(recipient=recipient, subject=subject, body=body, delivery_key=delivery_key)
+        except TransientMailError as exc:
+            raise TransientDeliveryError(exc.code, exc.retry_after) from exc
+        except PermanentMailError as exc:
+            raise PermanentDeliveryError(exc.code) from exc
+        except AmbiguousMailError as exc:
+            raise AmbiguousDeliveryError(exc.code) from exc
+
+
+def notification_sender():
+    """The sender for the configured email backend: Graph in production, the local sink otherwise."""
+    return GraphNotificationSender() if settings.EMAIL_BACKEND == settings.GRAPH_EMAIL_BACKEND else LocalEmailSink()
 
 
 def _safe_error_code(value):
@@ -364,7 +390,9 @@ def delivery_result(notification, error, *, now):
             changes["status"] = Notification.Status.EXHAUSTED
         else:
             changes["status"] = Notification.Status.RETRY
-            changes["next_attempt_at"] = now + timedelta(seconds=min(3600, 60 * 2 ** (failures - 1)))
+            # Back off exponentially, waiting longer when the provider asks for it.
+            delay = max(60 * 2 ** (failures - 1), getattr(error, "retry_after", None) or 0)
+            changes["next_attempt_at"] = now + timedelta(seconds=min(3600, delay))
         return Outcome.TRANSIENT_FAILURE, code, changes
     if isinstance(error, PermanentDeliveryError):
         code = _safe_error_code(error.code)
@@ -376,7 +404,7 @@ def delivery_result(notification, error, *, now):
 # Lock an assignment before any of its notifications.
 def dispatch_claimed(notification_id, claim_token, *, now=None, sender=None):
     now = now or timezone.now()
-    sender = sender or LocalEmailSink()
+    sender = sender or notification_sender()
     with transaction.atomic():
         assignment_id = Notification.objects.values_list("assignment_id", flat=True).get(pk=notification_id)
         assignment = Assignment.objects.select_for_update().select_related("employee", "version").get(
@@ -414,11 +442,15 @@ def dispatch_claimed(notification_id, claim_token, *, now=None, sender=None):
         return _save_transition(notification, now, {"attempt_count": number, **changes, **_RELEASED_CLAIM})
 
 
-def process_ready_notifications(*, limit=100, now=None, sender=None):
+def process_ready_notifications(*, limit=100, now=None, sender=None, should_stop=None):
+    """Dispatch up to ``limit`` due notifications, checking ``should_stop`` before each new claim."""
     now = now or timezone.now()
+    sender = sender or notification_sender()
     recover_stale_claims(now=now)
     processed = []
     for _ in range(limit):
+        if should_stop and should_stop():
+            break
         claim = claim_next_notification(now=now)
         if claim is None:
             break

@@ -144,7 +144,14 @@ def send_account_email(employee, purpose):
         else:
             link = settings.APP_BASE_URL + reverse("sign_in")
         body = render_to_string(f"training/email/{purpose}.txt", {"employee": employee, "link": link})
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [employee.email])
+        try:
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [employee.email])
+        except Exception:
+            # The response must look the same either way; administrators see the flag and can resend.
+            logger.exception("Couldn't send the %s email to employee %s", purpose, employee.pk)
+            Employee.objects.filter(pk=employee.pk).update(link_send_failed_at=timezone.now())
+            return
+        Employee.objects.filter(pk=employee.pk, link_send_failed_at__isnull=False).update(link_send_failed_at=None)
         if settings.DEBUG and settings.DEV_AUTH_STUB:
             logger.info("Local %s link for %s: %s", purpose, employee.email, link)
 

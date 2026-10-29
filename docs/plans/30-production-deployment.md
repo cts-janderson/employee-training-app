@@ -80,7 +80,7 @@ Done; see **Status** below. These parts move to later steps:
 
 - `Dockerfile`:
   - Multi-stage build on `python:3.12-slim`, installing with `pip install .`.
-  - At build time, run `collectstatic` with placeholder settings that aren't secret: `DJANGO_SECRET_KEY=build`, a dummy `DATABASE_URL`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS=build` and `APP_BASE_URL=https://build.invalid`, which the step B startup checks require. Settings must not open a database connection at import.
+  - At build time, run `collectstatic` with placeholder settings that aren't secret: `DJANGO_SECRET_KEY=build`, a dummy `DATABASE_URL`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS=build`, `APP_BASE_URL=https://build.invalid` and `EMAIL_BACKEND=django.core.mail.backends.dummy.EmailBackend`, which the startup checks from steps B and C require. Settings must not open a database connection at import.
   - Non-root user.
 - `docker/entrypoint.sh` dispatches on the role:
   - `migrate`: `migrate --noinput`, then exit.
@@ -150,6 +150,18 @@ The October 29, 2026 security review of the Slice 29 and 31 commits found no cri
 - Plain-text account emails no longer escape names, and demo emails get the same normalization as real ones.
 - `check --deploy` reports only the two intended HSTS warnings: subdomains and preload.
 - Tests are in `training/test_production_settings.py`.
+
+**Step C, implemented October 29, 2026.** See [ADR-0011](../adr/0011-email-through-microsoft-graph.md):
+
+- `training/mail.py` sends through Graph with the client-credentials flow. It tells "not sent" apart from "sent with no answer" using its own `https_post`, and maps each outcome to retryable, permanent or ambiguous.
+- `GraphEmailBackend` carries account emails.
+- The notification worker picks its transport from `EMAIL_BACKEND`, honors `Retry-After`, refuses `.test` addresses when sending through Graph, stops cleanly on SIGTERM between notifications, and records a `WorkerHeartbeat` each cycle.
+- A failed account email is logged without the link, sets `Employee.link_send_failed_at` (shown as **Email not sent**), and no longer returns a 500.
+- With debug off, startup requires the Graph settings unless another backend is set explicitly.
+- Log redaction also covers `stack_info`.
+- Tests are in `training/test_mail.py`. Nothing has been sent through a real tenant yet; that needs the Entra app registration from step H.
+
+Still open from the review findings: separate link counters per purpose, and sending account emails off the request path to hide timing.
 
 Gunicorn's access-log redaction comes with step E. Other open items, also for step E:
 

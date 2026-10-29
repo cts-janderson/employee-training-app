@@ -35,6 +35,7 @@
     <article class="collection-row employee-row">
       <span class="person-avatar" aria-hidden="true">{{ employee.name|first|upper|default:"?" }}</span>
       <div class="record-main"><h3>{{ employee.name }}</h3><p class="record-subtitle">{{ employee.email }}</p></div>
+      {% if employee.link_send_failed_at %}<span class="record-status"><span class="badge amber">Email not sent</span></span>{% endif %}
       <form method="post">{% csrf_token %}<input type="hidden" name="employee_id" value="{{ employee.id }}"><button type="submit" name="action" value="resend_setup">Resend setup link</button></form>
     </article>
   {% empty %}

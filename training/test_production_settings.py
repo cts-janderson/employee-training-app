@@ -19,11 +19,12 @@ from .models import Employee
 ROOT = Path(__file__).resolve().parent.parent
 PRODUCTION = {"DJANGO_DEBUG": "0", "DEV_AUTH_STUB": "0", "DJANGO_SECRET_KEY": "x" * 50,
               "DJANGO_ALLOWED_HOSTS": "training.example.com", "APP_BASE_URL": "https://training.example.com",
-              "DATABASE_URL": "postgresql://localhost:5432/unused"}
+              "DATABASE_URL": "postgresql://localhost:5432/unused",
+              "GRAPH_TENANT_ID": "tenant", "GRAPH_CLIENT_ID": "client", "GRAPH_CLIENT_SECRET": "secret"}
 
 
 def load_settings(**overrides):
-    env = {key: value for key, value in os.environ.items() if not key.startswith(("DJANGO_", "DEV_", "APP_"))}
+    env = {key: value for key, value in os.environ.items() if not key.startswith(("DJANGO_", "DEV_", "APP_", "GRAPH_", "EMAIL_"))}
     env.update(PRODUCTION)
     env.update(overrides)
     env = {key: value for key, value in env.items() if value is not None}
@@ -44,8 +45,15 @@ class ProductionSettingsTests(SimpleTestCase):
 
     def test_documented_build_placeholders_load(self):
         result = load_settings(DJANGO_SECRET_KEY="build", DJANGO_ALLOWED_HOSTS="build",
-                               APP_BASE_URL="https://build.invalid", DATABASE_URL="postgresql://build/unused")
+                               APP_BASE_URL="https://build.invalid", DATABASE_URL="postgresql://build/unused",
+                               EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend",
+                               GRAPH_TENANT_ID=None, GRAPH_CLIENT_ID=None, GRAPH_CLIENT_SECRET=None)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_production_requires_graph_credentials_to_send_email(self):
+        result = load_settings(GRAPH_CLIENT_SECRET=None)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("GRAPH_CLIENT_SECRET are required", result.stderr)
 
     def test_production_requires_explicit_allowed_hosts(self):
         result = load_settings(DJANGO_ALLOWED_HOSTS=None)
