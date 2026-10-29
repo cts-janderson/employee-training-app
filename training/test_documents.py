@@ -151,6 +151,16 @@ class DocumentWorkflowTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.title, "Read")
 
+    def test_edit_to_removed_document_retains_submitted_content(self):
+        item = self.doc()
+        stale_revision = self.version.revision
+        self.edit("remove", target=item.pk, confirm=True)
+        response = self.client.post(self.url, {"revision": stale_revision, "target": item.pk, "action": "save",
+            "item_title": "My unsaved title", "body": "my unsaved body"})
+        self.assertEqual(response.status_code, 409)
+        self.assertContains(response, "My unsaved title", status_code=409)
+        self.assertContains(response, "my unsaved body", status_code=409)
+
     def test_invalid_body_rerenders_and_does_not_save_title(self):
         item = self.doc()
         response = self.client.post(self.url, {"revision": self.version.revision, "target": item.pk,
