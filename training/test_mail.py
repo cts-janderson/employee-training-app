@@ -1,12 +1,14 @@
 import json
 import socket
+import threading
 from datetime import timedelta
 from unittest import mock
 
 from django.core import mail
 from django.core.mail import send_mail
 from django.core.management import call_command
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.db import close_old_connections, connections
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from .accounts import send_account_email
@@ -86,7 +88,8 @@ class GraphMailSenderTests(SimpleTestCase):
             self.send(FakeGraph(NoAnswer("TimeoutError")))  # token cached from the previous send
 
     def test_malformed_token_responses_are_retryable(self):
-        for body in (b"not json", b"{}", b'{"access_token": "t", "expires_in": "soon"}', b"[]"):
+        for body in (b"not json", b"{}", b'{"access_token": "t", "expires_in": "soon"}', b"[]",
+                     b'{"access_token": null}', b'{"access_token": ""}', b'{"access_token": 7}'):
             GraphMailSender._token_cache.clear()
             with self.subTest(body=body), self.assertRaises(TransientMailError) as raised:
                 self.send(FakeGraph((200, {}, body)))
@@ -190,6 +193,47 @@ class LostClaimTests(TestCase):
             self.assertEqual(process_ready_notifications(sender=object()), ["sent"])
 
 
+class SlowSendTests(TestCase):
+    def test_retry_after_counts_from_when_the_send_finished(self):
+        from .notifications import dispatch_claimed
+        claimed_at = timezone.now() - timedelta(seconds=30)
+
+        class SlowThrottled:
+            def send(self, **kwargs):
+                raise TransientDeliveryError("graph_429", 120)
+
+        notification = self.claimed_notification()
+        real_now = timezone.now
+        readings = iter([claimed_at])  # The dispatch starts at the claim time; later readings are real.
+        with mock.patch("training.notifications.next_state", return_value={"status": Notification.Status.PENDING}), \
+                mock.patch("training.notifications._verified_recipient", return_value="sam@corp.example"), \
+                mock.patch("training.notifications._message", return_value=("s", "b")), \
+                mock.patch("training.notifications.timezone.now", side_effect=lambda: next(readings, None) or real_now()):
+            dispatch_claimed(notification.id, notification.claim_token, sender=SlowThrottled())
+        notification.refresh_from_db()
+        self.assertGreaterEqual((notification.next_attempt_at - claimed_at).total_seconds(), 149)
+
+    def claimed_notification(self):
+        import uuid
+        from .models import Slide, Training, TrainingVersion
+        from .assignments import create_assignments
+        admin = Employee.objects.create(name="A", email="a@example.test", role=Employee.Role.ADMINISTRATOR, is_demo=True)
+        learner = Employee.objects.create(name="L", email="l@example.test", is_demo=True)
+        training = Training.objects.create(is_demo=True)
+        version = TrainingVersion.objects.create(training=training, version_number=1, title="T")
+        Slide.objects.create(version=version, position=1, header="h", body="b")
+        version.status = TrainingVersion.Status.PUBLISHED
+        version.save()
+        create_assignments(operation_id=uuid.uuid4(), actor=admin, version_id=version.id, employee_ids=[learner.id],
+                           due_date_value=(timezone.now() + timedelta(days=5)).date().isoformat())
+        notification = Notification.objects.first()
+        token = uuid.uuid4()
+        Notification.objects.filter(pk=notification.pk).update(status=Notification.Status.SENDING, claim_token=token,
+                                                               claimed_at=timezone.now())
+        notification.refresh_from_db()
+        return notification
+
+
 class FailingBackend:
     def __init__(self, *args, **kwargs):
         pass
@@ -262,3 +306,48 @@ class NotificationWorkerTests(TestCase):
     def test_one_cycle_records_a_heartbeat(self):
         call_command("dispatch_notifications", stdout=open("/dev/null", "w"))
         self.assertTrue(WorkerHeartbeat.objects.filter(name="notifications").exists())
+
+
+DELIVERED = []
+
+
+class SlowBackend:
+    """Takes a moment per send; refuses the verification email outright and delivers anything else."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def send_messages(self, messages):
+        import time
+        time.sleep(0.3)
+        if messages[0].subject.startswith("Confirm"):
+            raise TransientMailError("graph_unreachable")
+        DELIVERED.extend(messages)
+        return len(messages)
+
+
+@override_settings(EMAIL_BACKEND="training.test_mail.SlowBackend")
+class ConcurrentAccountEmailTests(TransactionTestCase):
+    def test_a_failed_send_never_breaks_a_concurrently_delivered_link(self):
+        import re
+        from .accounts import setup_tokens
+        DELIVERED.clear()
+        employee = Employee.objects.create(name="Ivy", email="ivy@corp.example")
+        barrier = threading.Barrier(2)
+
+        def run(purpose):
+            close_old_connections()
+            try:
+                barrier.wait()
+                send_account_email(Employee.objects.get(pk=employee.pk), purpose)  # No transaction: sends now.
+            finally:
+                connections.close_all()
+
+        with self.assertLogs("training.accounts", "ERROR"):
+            threads = [threading.Thread(target=run, args=(purpose,)) for purpose in ("verify", "setup")]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        token = re.search(r"/account/setup/[^/]+/([^/]+)/", DELIVERED[0].body).group(1)
+        self.assertTrue(setup_tokens.check_token(Employee.objects.get(pk=employee.pk), token))

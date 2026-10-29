@@ -407,6 +407,9 @@ def delivery_result(notification, error, *, now):
 
 # Lock an assignment before any of its notifications.
 def dispatch_claimed(notification_id, claim_token, *, now=None, sender=None):
+    # Without a fixed clock, outcomes are timed from when the send finished, so a provider's
+    # Retry-After isn't shortened by however long the request took.
+    fixed_clock = now is not None
     now = now or timezone.now()
     sender = sender or notification_sender()
     with transaction.atomic():
@@ -436,14 +439,16 @@ def dispatch_claimed(notification_id, claim_token, *, now=None, sender=None):
                 delivery_key=notification.id, recipient=recipient, subject=subject, body=body,
             )
         except Exception as exc:
-            attempt.outcome, attempt.error_code, changes = delivery_result(notification, exc, now=now)
+            finished = now if fixed_clock else timezone.now()
+            attempt.outcome, attempt.error_code, changes = delivery_result(notification, exc, now=finished)
         else:
-            attempt.outcome, attempt.error_code, changes = delivery_result(notification, None, now=now)
+            finished = now if fixed_clock else timezone.now()
+            attempt.outcome, attempt.error_code, changes = delivery_result(notification, None, now=finished)
             attempt.provider_reference = str(reference)[:200]
             changes["provider_reference"] = attempt.provider_reference
-        attempt.finished_at = now
+        attempt.finished_at = finished
         attempt.save(update_fields=["finished_at", "outcome", "provider_reference", "error_code"])
-        return _save_transition(notification, now, {"attempt_count": number, **changes, **_RELEASED_CLAIM})
+        return _save_transition(notification, finished, {"attempt_count": number, **changes, **_RELEASED_CLAIM})
 
 
 def process_ready_notifications(*, limit=100, now=None, sender=None, should_stop=None):
@@ -462,7 +467,7 @@ def process_ready_notifications(*, limit=100, now=None, sender=None, should_stop
         if claim is None:
             break
         try:
-            processed.append(dispatch_claimed(*claim, now=current, sender=sender))
+            processed.append(dispatch_claimed(*claim, now=now, sender=sender))
         except NotificationError:
             # Another worker recovered this claim; it's already recorded for reconciliation.
             logger.warning("Notification %s was recovered by another worker before dispatch finished", claim[0])

@@ -118,6 +118,8 @@ class GraphMailSender:
                     payload = json.loads(body)
                     token = payload["access_token"]
                     lifetime = int(payload.get("expires_in", 0))
+                    if not isinstance(token, str) or not token:
+                        raise ValueError("empty access token")
                 except (ValueError, KeyError, TypeError, AttributeError):
                     # Nothing was sent, so an unreadable token response is safe to retry.
                     raise TransientMailError("graph_token_malformed") from None
