@@ -351,3 +351,21 @@ class ConcurrentAccountEmailTests(TransactionTestCase):
                 thread.join()
         token = re.search(r"/account/setup/[^/]+/([^/]+)/", DELIVERED[0].body).group(1)
         self.assertTrue(setup_tokens.check_token(Employee.objects.get(pk=employee.pk), token))
+
+    def test_the_new_link_is_committed_before_the_email_leaves(self):
+        employee = Employee.objects.create(name="Ivy", email="ivy@corp.example")
+        seen = []
+
+        class Observing(SlowBackend):
+            def send_messages(self, messages):
+                def read():
+                    seen.append(Employee.objects.values_list("link_generation", flat=True).get(pk=employee.pk))
+                    connections.close_all()
+                reader = threading.Thread(target=read)  # Its own connection sees only committed data.
+                reader.start()
+                reader.join()
+                return len(messages)
+
+        with mock.patch("training.test_mail.SlowBackend.send_messages", Observing.send_messages):
+            send_account_email(employee, "setup")
+        self.assertEqual(seen, [1])

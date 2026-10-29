@@ -1,6 +1,7 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
 import logging
 import unicodedata
+from contextlib import contextmanager
 
 from django.conf import settings
 from django.contrib.auth.backends import BaseBackend
@@ -11,7 +12,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -132,41 +133,59 @@ _EMAILS = {
 }
 
 
+@contextmanager
+def _account_email_lock(employee_id):
+    """Serialize account emails for one employee across transactions, with a PostgreSQL advisory lock."""
+    if connection.vendor != "postgresql":
+        yield
+        return
+    key = f"account-email:{employee_id}"
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_lock(hashtextextended(%s, 0))", [key])
+    try:
+        yield
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", [key])
+
+
 def send_account_email(employee, purpose):
     """Send after the surrounding transaction commits. A new link supersedes earlier ones."""
     subject, route, tokens = _EMAILS[purpose]
 
     def send():
-        # Hold the employee's row for the whole send, so concurrent sends and deactivation queue behind it.
-        # Each send then owns its generation, and a definite failure can restore exactly the previous one.
-        with transaction.atomic():
-            locked = Employee.objects.select_for_update().get(pk=employee.pk)
-            previous = locked.link_generation
+        # One send per employee at a time. The new generation is committed before the email leaves, so a
+        # delivered link survives a crash; a definite failure then restores exactly the previous one.
+        with _account_email_lock(employee.pk):
+            issued = None
             try:
-                if route:
-                    locked.link_generation = previous + 1
-                    locked.save(update_fields=["link_generation"])
-                    link = _link(route, locked, tokens)
-                else:
-                    link = settings.APP_BASE_URL + reverse("sign_in")
-                body = render_to_string(f"training/email/{purpose}.txt", {"employee": locked, "link": link})
-                send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [locked.email])
+                with transaction.atomic():
+                    current = Employee.objects.select_for_update().get(pk=employee.pk)
+                    previous = current.link_generation
+                    if route:
+                        current.link_generation = previous + 1
+                        current.save(update_fields=["link_generation"])
+                issued = current.link_generation
+                link = _link(route, current, tokens) if route else settings.APP_BASE_URL + reverse("sign_in")
+                body = render_to_string(f"training/email/{purpose}.txt", {"employee": current, "link": link})
+                send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [current.email])
             except Exception as exc:
                 # The response must look the same either way; administrators see the flag and can resend.
                 logger.exception("Couldn't send the %s email to employee %s", purpose, employee.pk)
-                if route:
-                    if not isinstance(exc, AmbiguousMailError):
-                        # Definitely not sent: the earlier link works again. An ambiguous send keeps the new
-                        # link, because the email may have arrived.
-                        locked.link_generation = previous
-                    locked.link_send_failed_at = timezone.now()
-                    locked.save(update_fields=["link_generation", "link_send_failed_at"])
-                employee.link_generation = locked.link_generation
+                if route and issued is not None:
+                    # Only while this send's link is still the newest: a deactivation meanwhile must win.
+                    newest = Employee.objects.filter(pk=employee.pk, link_generation=issued)
+                    if isinstance(exc, AmbiguousMailError):
+                        # The email may have arrived, so its link must keep working.
+                        newest.update(link_send_failed_at=timezone.now())
+                    else:
+                        newest.update(link_generation=previous, link_send_failed_at=timezone.now())
+                employee.link_generation = Employee.objects.values_list("link_generation", flat=True).get(
+                    pk=employee.pk)
                 return
-            if route and locked.link_send_failed_at:
-                locked.link_send_failed_at = None
-                locked.save(update_fields=["link_send_failed_at"])
-            employee.link_generation = locked.link_generation
+            if route:
+                Employee.objects.filter(pk=employee.pk, link_generation=issued).update(link_send_failed_at=None)
+            employee.link_generation = issued
         if settings.DEBUG and settings.DEV_AUTH_STUB:
             logger.info("Local %s link for %s: %s", purpose, employee.email, link)
 
