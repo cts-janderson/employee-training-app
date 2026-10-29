@@ -77,6 +77,10 @@ class ClientAddressTests(SimpleTestCase):
         self.assertEqual(self.client_for("::ffff:172.18.0.5", "::ffff:203.0.113.9"), "203.0.113.9")
         self.assertEqual(self.client_for("::ffff:198.51.100.7"), "198.51.100.7")
 
+    @override_settings(TRUSTED_PROXY_NETWORKS=[ip_network("::ffff:172.18.0.0/112")])
+    def test_a_mapped_trusted_network_still_trusts_a_mapped_proxy(self):
+        self.assertEqual(self.client_for("::ffff:172.18.0.5", "203.0.113.9"), "203.0.113.9")
+
     @override_settings(TRUSTED_PROXY_NETWORKS=[])
     def test_without_trusted_proxies_the_header_is_ignored(self):
         self.assertEqual(self.client_for("172.18.0.5", "203.0.113.9"), "172.18.0.5")

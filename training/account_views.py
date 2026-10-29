@@ -47,10 +47,12 @@ def _client(request):
     remote = request.META.get("REMOTE_ADDR", "")
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
     try:
-        peer = _address(remote)
+        raw, peer = ip_address(remote), _address(remote)
     except ValueError:
         return remote
-    if not forwarded or not any(peer in network for network in settings.TRUSTED_PROXY_NETWORKS):
+    # Match trust against both forms, so a network written either way still covers a mapped peer.
+    trusted = any(raw in network or peer in network for network in settings.TRUSTED_PROXY_NETWORKS)
+    if not forwarded or not trusted:
         return str(peer)
     try:
         # The proxy appends the address it saw, so earlier entries may be forged by the client.
