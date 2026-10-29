@@ -47,14 +47,10 @@ Outcome: one Docker Compose stack that runs on any Linux host with outbound HTTP
 
 ### B. Settings and request boundary (`config/settings.py`, `training/account_views.py`)
 
-- Fail at startup when debug is off and `APP_BASE_URL` isn't https, or when Graph settings or `DJANGO_ALLOWED_HOSTS` are missing.
-- Set `CSRF_TRUSTED_ORIGINS` from `APP_BASE_URL`.
-- Make `SECURE_HSTS_SECONDS` an environment setting that starts small. Document the intentional `check --deploy` warnings for subdomains and preload rather than enabling those options.
-- Set `SESSION_COOKIE_AGE`, `SECURE_REFERRER_POLICY`, `SECURE_REDIRECT_EXEMPT = [r"^healthz$"]` and bounded outbound timeouts.
-- Configure `LOGGING` to send output to stdout in every mode, without logging token-bearing URLs (`/verify/…`, `/set-password/…`, `/reset/…`). Use gunicorn's access-log format or a filter to redact them.
-- Client IP: add `TRUSTED_PROXY_NETWORKS`, set to the Compose network's CIDR. `_client()` uses the **last** `X-Forwarded-For` entry only when `REMOTE_ADDR` is inside a trusted network, and otherwise uses `REMOTE_ADDR`. Caddy replaces any client-supplied XFF by default. `web` isn't published, so only Caddy can reach it.
-- Tests: forged, malformed, missing and IPv6 headers, and a request from an untrusted peer.
-- Remove `RENDER_EXTERNAL_HOSTNAME`.
+Done; see **Status** below. These parts move to later steps:
+
+- **Step C:** a startup failure when Graph settings are missing, and bounded outbound timeouts for the mail client.
+- **Step E:** gunicorn access-log redaction.
 
 ### C. Email delivery
 
@@ -84,7 +80,7 @@ Outcome: one Docker Compose stack that runs on any Linux host with outbound HTTP
 
 - `Dockerfile`:
   - Multi-stage build on `python:3.12-slim`, installing with `pip install .`.
-  - At build time, run `collectstatic` with placeholder settings that aren't secret: `DJANGO_SECRET_KEY=build`, a dummy `DATABASE_URL`, `DJANGO_DEBUG=0`. Settings must not open a database connection at import.
+  - At build time, run `collectstatic` with placeholder settings that aren't secret: `DJANGO_SECRET_KEY=build`, a dummy `DATABASE_URL`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS=build` and `APP_BASE_URL=https://build.invalid`, which the step B startup checks require. Settings must not open a database connection at import.
   - Non-root user.
 - `docker/entrypoint.sh` dispatches on the role:
   - `migrate`: `migrate --noinput`, then exit.
@@ -95,13 +91,13 @@ Outcome: one Docker Compose stack that runs on any Linux host with outbound HTTP
   - Only `proxy` publishes ports 80 and 443.
   - Named volumes for `pgdata`, `caddy_data` and `backups`.
   - `web`, `worker` and `cleanup` depend on `migrate` with `condition: service_completed_successfully`.
-  - Health checks: `web` calls `/healthz` with an allowed `Host` header. `proxy` doesn't depend on `web`'s health, which avoids a cycle.
+  - Health checks: `web` calls `/health/` with an allowed `Host` header. `proxy` doesn't depend on `web`'s health, which avoids a cycle.
   - The `json-file` logging driver with `max-size` and `max-file`.
   - `restart: unless-stopped`. That only restarts processes that exit, so the worker exits on fatal errors, and monitoring (step F) catches anything that hangs.
   - Always run with `docker compose --env-file .env.production`, which handles interpolation and is gitignored. Ship `.env.production.example`.
 - `docker/caddy/Dockerfile` (xcaddy build with `caddy-dns/cloudflare`) and a `Caddyfile` containing `{$APP_HOST}`, `tls { dns cloudflare {$CF_API_TOKEN} }` and `reverse_proxy web:8000`. The token is a zone-scoped DNS-edit token.
 - `.dockerignore`: `.venv`, `node_modules`, `.git`, `staticfiles`, `.env*` and `docs/screenshots`.
-- `GET /healthz` in `training/urls.py`: no authentication, runs `SELECT 1`, and returns 200 or 503.
+- `GET /health/` in `training/urls.py`: no authentication, runs `SELECT 1`, and returns 200 or 503.
 - **Upgrade procedure:** `git pull` → `docker compose build` → `docker compose stop worker cleanup web` → `docker compose run --rm migrate` → `docker compose up -d`. Document rollback as: restore the pre-upgrade dump, then redeploy the previous image tag.
 
 ### F. Backups and monitoring
@@ -139,7 +135,26 @@ The October 29, 2026 security review of the Slice 29 and 31 commits found no cri
 - **Step C:** send account emails off the request path, so the reset response time doesn't reveal whether an email is registered.
 - **Step C:** give each link purpose its own counter, so a reset request doesn't cancel an outstanding verification or setup link.
 - **Step A follow-up:** let administrators reject or remove an unverified applicant, or expire one automatically. Today an unverified registration blocks an invitation to the same address.
-- **Step B:** set `SECURE_REFERRER_POLICY = "same-origin"` explicitly, and escape nothing in the plain-text account emails (`{% autoescape off %}`).
+
+## Status
+
+**Step B, implemented October 29, 2026.** These are in `config/settings.py`, `config/logging.py` and `_client` in `training/account_views.py`:
+
+- With debug off, startup requires an https `APP_BASE_URL` and an explicit `DJANGO_ALLOWED_HOSTS`.
+- `CSRF_TRUSTED_ORIGINS` comes from `APP_BASE_URL`.
+- HSTS starts at one hour, set through `SECURE_HSTS_SECONDS`. The referrer policy is `same-origin`, frames are denied, and sessions last 12 hours by default.
+- `/health/` is exempt from the https redirect.
+- Every log goes to stdout through a filter that redacts account-link tokens, including Django's own request and runserver lines.
+- Rate limits take the client address from the last `X-Forwarded-For` entry, but only when the request comes from a network listed in `TRUSTED_PROXY_NETWORKS`.
+- `RENDER_EXTERNAL_HOSTNAME` is removed.
+- Plain-text account emails no longer escape names, and demo emails get the same normalization as real ones.
+- `check --deploy` reports only the two intended HSTS warnings: subdomains and preload.
+- Tests are in `training/test_production_settings.py`.
+
+Gunicorn's access-log redaction comes with step E. Other open items, also for step E:
+
+- **Proxy header handling:** Caddy must replace any `X-Forwarded-For` header the client sends.
+- **Network isolation:** `web` must be reachable only through Caddy. Both the forwarded-address and the forwarded-protocol header depend on this.
 
 ## Order
 
@@ -150,7 +165,7 @@ The steps run in order, each as its own PR: A → B → C → D → E → F → 
 - `./scripts/test-local.sh` passes after each step: the full PostgreSQL suite, `check` and `collectstatic`.
 - `DJANGO_DEBUG=0 manage.py check --deploy` passes, or produces only the documented HSTS warnings.
 - Local stack with `docker compose --env-file .env.production up --build`. The Graph sender points at a local fake endpoint, or at a test tenant mailbox.
-  - `/healthz` returns 200 through Caddy, and plain http redirects to https.
+  - `/health/` returns 200 through Caddy, and plain http redirects to https.
   - `create_administrator` prompts and creates the administrator. Sign in, invite an employee, and confirm the setup email is sent. Complete setup, assign training, and confirm that the worker sends the notification.
   - Make the fake endpoint return 429, then 202: the notification retries and then succeeds. Make it time out after the send: the notification becomes ambiguous and appears for reconciliation.
   - Kill `worker` mid-claim and restart it. The stale claim becomes **ambiguous**, not retried, and shows up in `ops_status`.

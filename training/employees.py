@@ -3,7 +3,7 @@ from django.core.validators import validate_email
 from django.db import transaction
 from django.utils import timezone
 
-from .accounts import AccountInputError, AccountState, account_state, send_account_email
+from .accounts import AccountInputError, AccountState, account_state, normalize_email, send_account_email
 from .accounts import _validated_profile as _validated_account_profile
 from .models import Employee, EmployeeActivityChange, EmployeeProfileChange
 from .population import employees as employees_in, is_administrator
@@ -33,7 +33,7 @@ def employee_status(employee):
 
 def _validated_profile(name, email):
     name = name.strip()
-    email = email.strip().lower()
+    email = normalize_email(email)
     if not name or len(name) > 200:
         raise EmployeeInputError("Enter a name of at most 200 characters.", target=("profile", "name"))
     try:

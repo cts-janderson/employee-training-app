@@ -1,3 +1,6 @@
+from ipaddress import ip_address
+
+from django.conf import settings
 from django.contrib.auth import logout, update_session_auth_hash, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
@@ -40,7 +43,28 @@ INVALID_LINK = "This link is invalid or has expired. Request a new one."
 
 
 def _client(request):
-    return request.META.get("REMOTE_ADDR", "")
+    """The client address for rate limits. Behind a trusted proxy, the last X-Forwarded-For entry is the client."""
+    remote = request.META.get("REMOTE_ADDR", "")
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    try:
+        raw, peer = ip_address(remote), _address(remote)
+    except ValueError:
+        return remote
+    # Match trust against both forms, so a network written either way still covers a mapped peer.
+    trusted = any(raw in network or peer in network for network in settings.TRUSTED_PROXY_NETWORKS)
+    if not forwarded or not trusted:
+        return str(peer)
+    try:
+        # The proxy appends the address it saw, so earlier entries may be forged by the client.
+        return str(_address(forwarded.split(",")[-1].strip()))
+    except ValueError:
+        return str(peer)
+
+
+def _address(value):
+    """Parse an address, reading an IPv4-mapped IPv6 address as IPv4 so one client has one key."""
+    address = ip_address(value)
+    return getattr(address, "ipv4_mapped", None) or address
 
 
 def _message(request, title, message, *, status=200, link=None, link_text=""):
