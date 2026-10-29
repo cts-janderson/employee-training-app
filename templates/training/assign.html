@@ -3,13 +3,13 @@
 {% block content %}
   <p><a href="{% url 'training_list' %}">← Trainings</a></p>
   <h1>Assign {{ training_title }}</h1>
-  <p class="muted">Each selected employee gets a separate assignment pinned to the selected published version.</p>
+  <p class="muted">Choose the training version, due date, and recipients.</p>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   {% if results %}
     <section class="card" role="status">
       <h2>Assignment results</h2>
       <p>{{ result_counts.created }} created · {{ result_counts.already_assigned }} already assigned · {{ result_counts.conflict }} conflicts · {{ result_counts.inactive }} inactive</p>
-      <p>Assignment email is queued separately for delivery. A created assignment does not mean its email was sent.</p>
+      <p>You can check notification status from each assignment.</p>
       <ul>{% for result in results %}<li>{{ result.employee.name }}: {{ result.get_outcome_display }} — {{ result.detail }}{% if result.assignment %} <a href="{% url 'assignment_admin_detail' result.assignment.id %}">View assignment</a>{% endif %}</li>{% endfor %}</ul>
     </section>
   {% endif %}
@@ -17,9 +17,9 @@
     <section class="card" aria-labelledby="review-heading">
       <h2 id="review-heading">Review assignment</h2>
       <p><strong>{{ review.version.title }}</strong> · Version {{ review.version.version_number }}</p>
-      <p>Due {{ review.due_date }} ({{ review.zone_name }}) · {{ review.count }} recipient{{ review.count|pluralize }}</p>
-      {% if review.group_id %}<p>Group: {{ review.group_name }}. Membership is read again when you submit.</p>{% endif %}
-      <p class="muted">These recipient checks are provisional. Final submission checks current assignments and employee activity again.</p>
+      <p>Due {{ review.due_date }} · {{ review.count }} recipient{{ review.count|pluralize }}</p>
+      {% if review.group_id %}<p>Group: {{ review.group_name }}.</p>{% endif %}
+      <p class="muted">Recipient availability may change before you confirm.</p>
       <ul>{% for row in review.rows %}<li><strong>{{ row.employee.name }}</strong> ({{ row.employee.email }}) — {{ row.status }}</li>{% endfor %}</ul>
     </section>
     <form method="post" class="actions">
@@ -42,8 +42,8 @@
         {% for row in version_rows %}<option value="{{ row.version.id }}" {% if row.selected %}selected{% endif %}>Version {{ row.version.version_number }}: {{ row.version.title }}</option>{% endfor %}
       </select>
     </div>
-    <div><label for="due-date">Due date ({{ org_time_zone }})</label><input id="due-date" name="due_date" type="date" value="{{ selected_due_date }}" required></div>
-    <fieldset><legend>Recipient source</legend>
+    <div><label for="due-date">Due date</label><input id="due-date" name="due_date" type="date" value="{{ selected_due_date }}" required></div>
+    <fieldset><legend>Assign to</legend>
       <label><input type="radio" name="recipient_source" value="employees" {% if selected_source == "employees" %}checked{% endif %}>Employees</label>
       <label><input type="radio" name="recipient_source" value="group" {% if selected_source == "group" %}checked{% endif %}>Group</label>
     </fieldset>

@@ -1,0 +1,17 @@
+  {% if version.status == "draft" %}<section id="supporting-material" class="card stack">
+    <h2>Supporting material</h2><p>Optional reference links are saved with this version. Use https:// links.</p>
+    {% if material_error %}<p class="error" role="alert">{{ material_error }}</p>{% endif %}
+    <form method="post" action="{% url 'save_materials' version.training_id %}">{% csrf_token %}
+      <input type="hidden" name="revision" value="{{ version.revision }}">
+      {% for material in material_rows|default:version.materials.all %}
+        <div class="card stack"><h3>Material {{ forloop.counter }}</h3>
+          <input type="hidden" name="material_id" value="{{ material.id }}">
+          <label for="material-name-{{ material.id }}">Name</label><input id="material-name-{{ material.id }}" name="material_name" value="{{ material.name }}" maxlength="200">
+          <label for="material-url-{{ material.id }}">https:// link</label><input id="material-url-{{ material.id }}" name="material_url" value="{{ material.url }}" maxlength="2000">
+          <label for="material-description-{{ material.id }}">Description (optional)</label><input id="material-description-{{ material.id }}" name="material_description" value="{{ material.description }}" maxlength="500">
+          <div class="actions"><button class="secondary" name="action" value="up:{{ material.id }}" {% if forloop.first %}disabled{% endif %}>Move up</button><button class="secondary" name="action" value="down:{{ material.id }}" {% if forloop.last %}disabled{% endif %}>Move down</button><button class="danger" name="action" value="remove:{{ material.id }}">Remove</button></div>
+        </div>
+      {% empty %}<p>No supporting material yet.</p>{% endfor %}
+      <div class="actions"><button class="secondary" name="action" value="add">Add material</button><button name="action" value="save">Save material</button></div>
+    </form>
+  </section>{% endif %}

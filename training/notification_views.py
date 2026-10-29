@@ -8,14 +8,14 @@ from .notifications import NotificationError, reconcile_notification, retry_noti
 
 
 DELIVERY_GUIDANCE = {
-    Notification.Status.PENDING: ("Queued for delivery", "Queued for the worker. Delivery has not happened yet."),
-    Notification.Status.SENDING: ("Sending", "The worker is processing this notification. Check back for its outcome."),
-    Notification.Status.RETRY: ("Retry scheduled", "The worker will retry at the next attempt time."),
-    Notification.Status.SENT: ("Sent to local sink", "The local sink accepted this notification. No action is needed."),
-    Notification.Status.SUPPRESSED: ("Suppressed", "No delivery will occur for this intent. Review the suppression reason below."),
-    Notification.Status.BLOCKED: ("Blocked", "Correct the recipient or assignment issue, then retry through the worker."),
-    Notification.Status.EXHAUSTED: ("Retries exhausted", "Review the attempts, then retry through the worker when the issue is resolved."),
-    Notification.Status.AMBIGUOUS: ("Ambiguous outcome", "Check the sink record and reconcile the outcome before another dispatch."),
+    Notification.Status.PENDING: ("Queued for delivery", "This message is waiting to be processed."),
+    Notification.Status.SENDING: ("Sending", "This message is being processed."),
+    Notification.Status.RETRY: ("Retry scheduled", "Another delivery attempt is scheduled."),
+    Notification.Status.SENT: ("Processed", "Processing is complete. No action is needed."),
+    Notification.Status.SUPPRESSED: ("Suppressed", "This message will not be sent. See the reason below."),
+    Notification.Status.BLOCKED: ("Blocked", "Check the recipient and assignment before retrying."),
+    Notification.Status.EXHAUSTED: ("Retries exhausted", "Check the delivery attempts before retrying."),
+    Notification.Status.AMBIGUOUS: ("Ambiguous outcome", "Confirm whether the message was received before retrying."),
 }
 
 
@@ -24,7 +24,7 @@ def _delivery_guidance(notification):
         confirmed = any(entry.decision == "delivered" for entry in notification.reconciliations.all())
         accepted = any(attempt.outcome == "accepted" for attempt in notification.delivery_attempts.all())
         if confirmed and not accepted:
-            return "Confirmed delivered", "Delivery was confirmed during reconciliation. No new dispatch was made."
+            return "Confirmed delivered", "Delivery was confirmed. No additional message was sent."
     return DELIVERY_GUIDANCE[notification.status]
 
 
@@ -79,7 +79,7 @@ def notification_log(request):
         "selected_status": status,
         "selected_kind": kind,
         "search": search,
-        "status_choices": Notification.Status.choices,
+        "status_choices": [(value, "Processed" if value == "sent" else label) for value, label in Notification.Status.choices],
         "kind_choices": Notification.Kind.choices,
     })
 

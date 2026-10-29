@@ -10,10 +10,10 @@
   </div>
 
   <section class="notification-overview" aria-label="Delivery overview">
-    <div class="notification-stat"><span>All notifications</span><strong>{{ counts.total }}</strong><small>Recorded delivery intents</small></div>
-    <div class="notification-stat queued"><span>Queued</span><strong>{{ counts.queued }}</strong><small>Pending or sending</small></div>
-    <div class="notification-stat sent"><span>Sent</span><strong>{{ counts.sent }}</strong><small>Accepted or confirmed</small></div>
-    <div class="notification-stat attention"><span>Needs attention</span><strong>{{ counts.attention }}</strong><small>Retry or intervention</small></div>
+    <div class="notification-stat"><span>All notifications</span><strong>{{ counts.total }}</strong><small>Training messages</small></div>
+    <div class="notification-stat queued"><span>Queued</span><strong>{{ counts.queued }}</strong><small>Waiting to be processed</small></div>
+    <div class="notification-stat sent"><span>Sent</span><strong>{{ counts.sent }}</strong><small>Processed messages</small></div>
+    <div class="notification-stat attention"><span>Needs attention</span><strong>{{ counts.attention }}</strong><small>Messages to review</small></div>
   </section>
 
   <form class="card notification-filters" method="get" role="search" aria-label="Filter notifications">

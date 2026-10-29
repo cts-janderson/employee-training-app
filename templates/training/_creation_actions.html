@@ -1,0 +1,3 @@
+<form method="post" action="{% url 'new_training' %}">{% csrf_token %}<input type="hidden" name="content_format" value="documents"><button type="submit">Create training</button></form>
+<form method="post" action="{% url 'new_library_quiz' %}">{% csrf_token %}<button type="submit">Create library quiz</button></form>
+<a href="{% url 'import_trainings' %}">Import training drafts</a>

@@ -1,0 +1,11 @@
+{% extends 'training/base.html' %}
+{% block title %}{{ document.title }} · Employee Training{% endblock %}
+{% block content %}
+<p><a href="{% url 'assignment_detail' assignment.id %}">← Assignment</a> / {{ document_path }}</p>
+<p>{{ assignment.version.title }} · Version {{ assignment.version.version_number }}</p>
+<div class="document-workspace"><aside class="card"><h2>Documents</h2><nav aria-label="Training documents"><ul>{% for item in outline %}<li>{% if item.kind == "section" %}<strong>{{ item.path }}</strong> · {{ item.acknowledged_count }}/{{ item.required_count }} documents{% else %}<a href="{% url 'assignment_document' assignment.id item.id %}" {% if item.id == document.id %}aria-current="page"{% endif %}>{{ item.path }}</a>{% endif %}</li>{% endfor %}</ul></nav></aside><article class="card document-reading"><h1>{{ document.title }}</h1>{{ document.rendered_body }}</article></div>
+{% if acknowledged %}<p role="status">You have acknowledged this document.</p>{% elif assignment.is_outstanding %}<form method="post" action="{% url 'acknowledge_document' assignment.id document.id %}">{% csrf_token %}<button>Acknowledge this document</button></form>{% else %}<p>This assignment has ended. You can review its documents.</p>{% endif %}
+{% if assignment.version.materials.exists %}<section class="card"><h2>Supporting material</h2><ul>{% for material in assignment.version.materials.all %}<li><a href="{{ material.url }}" rel="noopener noreferrer">{{ material.name }}</a></li>{% endfor %}</ul></section>{% endif %}
+
+<div class="actions">{% if previous %}<a class="button secondary" href="{% url 'assignment_document' assignment.id previous.id %}">Previous document</a>{% endif %}{% if next %}<a class="button secondary" href="{% url 'assignment_document' assignment.id next.id %}">Next document</a>{% endif %}</div>
+{% endblock %}

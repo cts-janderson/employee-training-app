@@ -1,6 +1,6 @@
 {% load tz %}
 <section class="relay-board quiz-outcomes-board" aria-label="Quiz outcomes overview">
-  <p class="scroll-hint">On narrow windows, scroll the chart horizontally. Exact values are available below.</p>
+
   <div class="relay-chart-scroll" role="region" aria-label="Quiz outcomes chart; scroll horizontally for the full chart" tabindex="0">
     <svg class="relay-chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 {{ quiz_chart.height }}" width="960" height="{{ quiz_chart.height }}" role="img" aria-labelledby="outcomes-title outcomes-description">
       <style>
@@ -42,12 +42,12 @@
   </div>
   {% if quiz_chart.total_rows > quiz_chart.rows|length %}<p class="chart-scope">Showing {{ quiz_chart.rows|length }} of {{ quiz_chart.total_rows }} trainings. View chart values for all.</p>{% endif %}
   <details class="relay-data quiz-outcomes-data"><summary>View chart values</summary>
-    <p class="scroll-hint">Scroll the values table horizontally to see every column.</p>
+
     <div class="table-scroll" role="region" aria-label="Quiz outcome values; scroll horizontally for all columns" tabindex="0"><table><thead><tr><th scope="col">Training</th><th scope="col">Passed</th><th scope="col">Not attempted</th><th scope="col">Retry needed</th><th scope="col">Assignments</th></tr></thead><tbody>
       {% for row in quiz_chart.all_rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.parts.passed }}</td><td>{{ row.parts.not_attempted }}</td><td>{{ row.parts.retry_needed }}</td><td>{{ row.total }}</td></tr>{% endfor %}
     </tbody></table></div>
     <h3>Assignments by employee</h3>
-    <p class="scroll-hint">Scroll the employee table horizontally to see every column.</p>
+
     <div class="table-scroll" role="region" aria-label="Quiz outcomes by employee; scroll horizontally for all columns" tabindex="0"><table><thead><tr><th scope="col">Employee</th><th scope="col">Version</th><th scope="col">Cycle</th><th scope="col">Outcome</th><th scope="col">Latest score</th><th scope="col">Latest attempt</th><th scope="col">Assignment</th></tr></thead><tbody>
       {% for row in quiz_chart.all_rows %}<tr class="outcomes-group-row"><th scope="rowgroup" colspan="7">{{ row.name }} · {{ row.total }} cycle{{ row.total|pluralize }}</th></tr>{% for person in row.people %}<tr><th scope="row">{{ person.assignment.employee.name }}</th><td>v{{ person.assignment.version.version_number }}</td><td>{{ person.assignment.cycle_number }}</td><td>{{ person.outcome_label }}</td><td>{{ person.latest_score }}</td><td>{% if person.latest_at %}{% timezone org_time_zone %}{{ person.latest_at|date:"Y-m-d H:i" }}{% endtimezone %}{% else %}—{% endif %}</td><td><a href="{% url 'assignment_admin_detail' person.assignment.id %}?return_to={{ browse.return_to|urlencode }}">Open assignment</a></td></tr>{% endfor %}{% endfor %}
     </tbody></table></div>

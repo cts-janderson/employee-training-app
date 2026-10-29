@@ -1,15 +1,18 @@
 {% extends "training/base.html" %}
+{% load static %}
 {% block title %}Learner quiz preview · Employee Training{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'training/quiz-learning.css' %}">{% endblock %}
 {% block content %}
+<div class="quiz-learning">
   <p class="quiz-back">{% if quiz.version_id %}{% if quiz.version.status == "draft" %}<a href="{% url 'quiz_editor' quiz.version.training_id %}">← Quiz editor</a>{% else %}<a href="{% url 'preview' quiz.version.training_id quiz.version_id %}">← Published version</a>{% endif %}{% else %}<a href="{% url 'library_quiz_editor' quiz.id %}">← Quiz editor</a>{% endif %}</p>
   <div class="page-heading quiz-take-heading"><div><p class="eyebrow">Learner preview</p><h1>{% if quiz.version_id %}{{ quiz.version.title|default:"Untitled training" }} quiz{% else %}{{ quiz.title|default:"Untitled quiz" }}{% endif %}</h1>
-    <p class="muted">This shows the saved quiz as a learner sees it. Your selections are not recorded, and answer keys are hidden.</p></div>
+    <p class="muted">Try the learner experience. Answers in this preview won’t be submitted.</p></div>
     <span class="quiz-question-count">{{ questions|length }} question{{ questions|length|pluralize }}</span>
   </div>
   <div class="quiz-take-questions">
     {% for question in questions %}
       <fieldset class="card quiz-take-question" {% if question.ranked %}data-ordering{% endif %}>
-        <legend><strong class="plain-text">Question {{ question.position }}: {{ question.prompt|default:"(Prompt not set)" }}</strong></legend>
+        <legend><strong class="plain-text"><span class="quiz-learning-number">Question {{ question.position }}</span><span class="quiz-learning-prompt">{{ question.prompt|default:"Add a question prompt" }}</span></strong></legend>
         {% include question.take_template %}
       </fieldset>
     {% empty %}<p>No questions have been saved yet.</p>{% endfor %}
@@ -26,4 +29,5 @@
       selects.forEach((select) => select.addEventListener("change", updateChoices));
     });
   </script>
+</div>
 {% endblock %}

@@ -54,7 +54,7 @@ class QuestionPresentationTests(TestCase):
         self.assertIn(f'name="correct_set_{multiple.id}"', content)
         self.assertIn(f'name="rank_{ordering.id}"', content)
         self.assertIn(f'id="rank-{ordering.options.first().id}"', content)
-        self.assertIn("Required rank for option 1", content)
+        self.assertIn("Correct order for option 1", content)
         self.assertIn("Option 1 is correct", content)
         self.assertIn("Option 1 text (required to publish)", content)
         self.assertIn(f'name="option_text_{true_false.id}" value="True"', content)
@@ -117,8 +117,8 @@ class QuestionPresentationTests(TestCase):
         self.assertIn(f'name="multi_{self.questions[2].id}"', content)
         self.assertIn(f'name="order_{self.questions[3].id}"', content)
         self.assertIn("Select every answer that applies.", content)
-        self.assertIn("Choose each option once, in the order it should appear.", content)
-        self.assertIn("Position 1 for question 4", content)
+        self.assertIn("Put these steps in order.", content)
+        self.assertIn("Step 1", content)
         self.assertEqual(content.count(" data-ordering\n"), 1)
         invalid = self.client.post(reverse("submit_quiz", args=[assignment.id]), {
             "submission_id": str(uuid.uuid4()),

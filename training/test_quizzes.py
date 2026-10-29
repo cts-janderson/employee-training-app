@@ -322,7 +322,7 @@ class QuizWorkflowTests(TestCase):
         quiz = self.create_four_format_quiz()
         self.version.refresh_from_db()
         saved = self.client.get(reverse("quiz_editor", args=[self.training.id]))
-        self.assertContains(saved, f"Saved revision {self.version.revision} at")
+        self.assertContains(saved, "Saved at")
         ordering = quiz.questions.get(type=Question.Type.ORDERING)
         options = list(ordering.options.all())
         payload = self.quiz_payload(edits={
@@ -377,7 +377,7 @@ class QuizWorkflowTests(TestCase):
         self.assertEqual(quiz.questions.count(), 1)
         self.assertEqual(quiz.questions.get().prompt, "Unsaved prompt")
         self.version.refresh_from_db()
-        self.assertContains(self.client.get(url), f"Saved revision {self.version.revision} at")
+        self.assertContains(self.client.get(url), "Saved at")
 
     def test_stale_quiz_shows_saved_and_submitted_content_before_apply(self):
         quiz = self.create_mixed_quiz()
@@ -389,7 +389,7 @@ class QuizWorkflowTests(TestCase):
         self.assertContains(conflict, "Server prompt", status_code=409)
         self.assertContains(conflict, "My unsaved prompt", status_code=409)
         self.version.refresh_from_db()
-        self.assertContains(conflict, f"Apply my quiz changes to revision {self.version.revision}", status_code=409)
+        self.assertContains(conflict, "Replace the saved quiz with my changes", status_code=409)
         self.assertEqual(quiz.questions.get(position=1).prompt, "Server prompt")
         applied = self.client.post(url, {**stale, "revision": str(self.version.revision)})
         self.assertEqual(applied.status_code, 302)
@@ -435,7 +435,7 @@ class QuizWorkflowTests(TestCase):
         self.client.post(reverse("demo_switch"), {"employee_id": str(self.employee.id)})
         page = self.client.get(reverse("take_quiz", args=[assignment.id]))
         self.assertContains(page, "Select every answer that applies")
-        self.assertContains(page, "Position 1")
+        self.assertContains(page, "Step 1")
         self.assertNotContains(page, "required_rank")
         self.assertNotContains(page, "is_correct")
         self.assertNotContains(page, "rank_")
@@ -769,4 +769,4 @@ class QuizWorkflowTests(TestCase):
         self.edit_quiz("add_single")
         editor = self.client.get(reverse("quiz_editor", args=[self.training.id]))
         self.assertContains(editor, "Needs work")
-        self.assertNotContains(editor, "Question 1: add a prompt")
+        self.assertContains(editor, "Question 1: add a prompt")

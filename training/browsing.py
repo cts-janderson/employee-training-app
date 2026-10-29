@@ -3,7 +3,7 @@ from urllib.parse import urlencode, urlsplit
 
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.urls import reverse
+from django.urls import Resolver404, resolve, reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 
@@ -44,10 +44,17 @@ def browse(request, queryset, *, search_fields, extra_params=None):
     return Browse(page, page.paginator.count, query, {**(extra_params or {}), "q": query}, request.path)
 
 
-def safe_return_to(request, list_name):
+def safe_return_to(request, list_name, *, report_details=False):
     value = request.GET.get("return_to", "")
     prefix = reverse(list_name)
-    if (value and url_has_allowed_host_and_scheme(value, allowed_hosts={request.get_host()})
-            and urlsplit(value).path == prefix):
-        return value
+    if value and url_has_allowed_host_and_scheme(value, allowed_hosts={request.get_host()}):
+        path = urlsplit(value).path
+        if path == prefix:
+            return value
+        if report_details:
+            try:
+                if resolve(path).url_name in {"reports", "training_report", "employee_report"}:
+                    return value
+            except Resolver404:
+                pass
     return prefix

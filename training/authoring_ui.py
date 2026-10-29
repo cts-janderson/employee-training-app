@@ -10,7 +10,7 @@ from .question_types import for_display
 
 def save_message(revision):
     saved_at = timezone.localtime(timezone.now(), ZoneInfo(settings.ORG_TIME_ZONE))
-    return f"Saved revision {revision} at {saved_at:%Y-%m-%d %H:%M:%S %Z}."
+    return f"Saved at {saved_at:%H:%M}."
 
 
 def record_save(request, key, revision):
@@ -208,3 +208,23 @@ def quiz_errors(messages, questions):
                 option["error"] = message
         links.append({"message": message, "href": href})
     return links, threshold_error
+
+
+def quiz_workspace(quiz, *, library=False):
+    """Readiness always describes persisted content, never submitted form fields."""
+    from .quiz_authoring import library_quiz_problems, quiz_content_problems
+
+    if quiz is None:
+        return {}
+    problems = library_quiz_problems(quiz) if library else quiz_content_problems(quiz)
+    links, _ = quiz_errors(problems, saved_question_rows(quiz))
+    for link, problem in zip(links, problems, strict=True):
+        if getattr(problem, "target", None) == ("title",):
+            link["href"] = "#quiz-title"
+    context = {"saved_readiness": links, "saved_quiz_ready": not problems}
+    if library and not problems:
+        from .models import TrainingVersion
+        context["attachment_drafts"] = TrainingVersion.objects.filter(
+            status=TrainingVersion.Status.DRAFT,
+        ).order_by("title", "id")
+    return context

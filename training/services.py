@@ -45,14 +45,16 @@ def _locked_draft(version_id, expected_revision, *, stale_message):
     return version
 
 
-def create_training():
+def create_training(*, content_format="slides"):
+    if content_format not in {"slides", "documents"}:
+        raise DraftInputError("Choose a supported content format.")
     with transaction.atomic():
         training = Training.objects.create()
-        TrainingVersion.objects.create(training=training, version_number=1)
+        TrainingVersion.objects.create(training=training, version_number=1, content_format=content_format)
         return training
 
 
-def create_revision(training_id):
+def create_revision(training_id, *, content_format=None):
     with transaction.atomic():
         training = Training.objects.select_for_update().get(pk=training_id)
         if training.versions.filter(status=TrainingVersion.Status.DRAFT).exists():
@@ -60,18 +62,26 @@ def create_revision(training_id):
         source = training.versions.filter(status=TrainingVersion.Status.PUBLISHED).order_by("-version_number").first()
         if source is None:
             raise DraftInputError("Publish the first version before creating a revision.")
+        chosen_format = content_format or source.content_format
+        if chosen_format not in {"slides", "documents"} or (source.content_format == "documents" and chosen_format != "documents"):
+            raise DraftInputError("Document training revisions must keep document content.")
         draft = TrainingVersion.objects.create(
             training=training,
             version_number=source.version_number + 1,
             title=source.title,
             description=source.description,
+            content_format=chosen_format,
         )
-        Slide.objects.bulk_create(
-            [
-                Slide(version=draft, position=slide.position, header=slide.header, body=slide.body, footer=slide.footer)
-                for slide in source.slides.all()
-            ]
-        )
+        if chosen_format == "documents":
+            from .documents import copy_into
+            copy_into(source, draft)
+        else:
+            Slide.objects.bulk_create(
+                [
+                    Slide(version=draft, position=slide.position, header=slide.header, body=slide.body, footer=slide.footer)
+                    for slide in source.slides.all()
+                ]
+            )
         SupportingMaterial.objects.bulk_create([
             SupportingMaterial(version=draft, position=item.position, name=item.name,
                                url=item.url, description=item.description)
@@ -182,8 +192,12 @@ def _publication_problems(title, rows):
 def publication_problems(version):
     from .quiz_authoring import quiz_publication_problems
 
-    rows = list(version.slides.values("header", "body"))
-    return (_publication_problems(version.title, rows) + quiz_publication_problems(version)
+    if version.content_format == "documents":
+        from .documents import publication_problems as document_problems
+        content_problems = document_problems(version)
+    else:
+        content_problems = _publication_problems(version.title, list(version.slides.values("header", "body")))
+    return (content_problems + quiz_publication_problems(version)
             + _material_problems(list(version.materials.values("name", "url"))))
 
 
@@ -300,6 +314,8 @@ def save_draft(*, version_id, expected_revision, title, description, rows, actio
             version_id, expected_revision,
             stale_message="A newer draft was saved. Reload before editing again.",
         )
+        if version.content_format != "slides":
+            raise DraftInputError("Use the document editor for this version.")
         existing_ids = set(version.slides.values_list("id", flat=True))
         if {row["id"] for row in rows} != existing_ids or len(rows) != len(existing_ids):
             raise DraftInputError("The slide list changed. Reload the draft and try again.")

@@ -1,5 +1,5 @@
 <section class="relay-board" aria-label="Pending assignment overview">
-  <p class="scroll-hint">On narrow windows, scroll the chart horizontally. Exact values are available below.</p>
+
   <div class="relay-chart-scroll" role="region" aria-label="Pending workload chart; scroll horizontally for the full chart" tabindex="0">
     <svg class="relay-chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 {{ chart.height }}" width="960" height="{{ chart.height }}" role="img" aria-labelledby="relay-title relay-description">
       <style>
@@ -28,7 +28,7 @@
   </div>
   {% if chart.total_rows > chart.rows|length %}<p class="chart-scope">Showing {{ chart.rows|length }} of {{ chart.total_rows }} trainings. View chart values for all.</p>{% endif %}
   <details class="relay-data"><summary>View chart values</summary>
-    <p class="scroll-hint">Scroll the values table horizontally to see every column.</p>
+
     <div class="table-scroll" role="region" aria-label="Pending workload chart values; scroll horizontally for all columns" tabindex="0"><table><thead><tr><th scope="col">Training</th>{% for item in chart.legend %}<th scope="col">{{ item.label }}</th>{% endfor %}<th scope="col">Assignments</th></tr></thead><tbody>
       {% for row in chart.rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.parts.overdue_not_started }}</td><td>{{ row.parts.overdue_in_progress }}</td><td>{{ row.parts.on_time_not_started }}</td><td>{{ row.parts.on_time_in_progress }}</td><td>{{ row.total }}</td></tr>{% endfor %}
     </tbody></table></div>

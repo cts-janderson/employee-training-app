@@ -1,0 +1,6 @@
+{% extends 'training/base.html' %}
+{% block title %}Drafts created · Employee Training{% endblock %}
+{% block content %}
+<p class="eyebrow">Step 3 of 3 · Done</p><h1>{{ results|length }} draft{{ results|length|pluralize }} created</h1><p>Review each draft in the editor before publication. No training was published or assigned.</p>
+<div class="collection-panel">{% for training in results %}<article class="collection-row"><h2>{{ training.display_title }}</h2><a class="button" href="{% url 'draft_editor' training.id %}">Open draft</a></article>{% endfor %}</div><p><a href="{% url 'training_list' %}">Back to training library</a> · <a href="{% url 'import_trainings' %}">Import more files</a></p>
+{% endblock %}

@@ -14,12 +14,12 @@
       <section class="card feature-card" aria-labelledby="assignment-{{ row.assignment.id }}">
         <div>
           <span class="badge amber">{{ row.deadline }}</span>
-          <h2 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}{% if row.assignment.cycle_number > 1 %} · Renewal · cycle {{ row.assignment.cycle_number }}{% endif %}</h2>
-          <p class="meta-row"><span>Due <strong>{{ row.assignment.due_date }}</strong> ({{ row.assignment.due_timezone }})</span></p>
+          <h2 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}{% if row.assignment.cycle_number > 1 %} · Renewal {{ row.assignment.cycle_number }}{% endif %}</h2>
+          <p class="meta-row"><span>Due <strong>{{ row.assignment.due_date }}</strong></span></p>
           <p class="muted">{{ row.progress }}</p>
         </div>
         <div class="feature-action">
-          <div class="progress-label"><span>Slides acknowledged</span><span>{{ row.acknowledged_count }} of {{ row.slide_count }}</span></div>
+          <div class="progress-label"><span>{% if row.assignment.version.content_format == 'documents' %}Documents acknowledged{% else %}Slides acknowledged{% endif %}</span><span>{{ row.acknowledged_count }} of {{ row.slide_count }}</span></div>
           <progress value="{{ row.acknowledged_count }}" max="{{ row.slide_count }}">{{ row.acknowledged_count }} of {{ row.slide_count }}</progress>
           <a class="button" href="{{ row.next_action.url }}">{{ row.next_action.label }}</a>
           <a href="{% url 'assignment_detail' row.assignment.id %}">Assignment details</a>
@@ -28,9 +28,9 @@
     {% else %}
       <section class="card training-item" aria-labelledby="assignment-{{ row.assignment.id }}">
         <span class="badge amber">{{ row.deadline }}</span>
-        <h3 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}{% if row.assignment.cycle_number > 1 %} · Renewal · cycle {{ row.assignment.cycle_number }}{% endif %}</h3>
-        <p class="meta-row"><span>Due <strong>{{ row.assignment.due_date }}</strong> ({{ row.assignment.due_timezone }})</span><span>{{ row.progress }}</span></p>
-        <div class="progress-label"><span>Slides acknowledged</span><span>{{ row.acknowledged_count }} of {{ row.slide_count }}</span></div>
+        <h3 id="assignment-{{ row.assignment.id }}">{{ row.assignment.version.title }}{% if row.assignment.cycle_number > 1 %} · Renewal {{ row.assignment.cycle_number }}{% endif %}</h3>
+        <p class="meta-row"><span>Due <strong>{{ row.assignment.due_date }}</strong></span><span>{{ row.progress }}</span></p>
+        <div class="progress-label"><span>{% if row.assignment.version.content_format == 'documents' %}Documents acknowledged{% else %}Slides acknowledged{% endif %}</span><span>{{ row.acknowledged_count }} of {{ row.slide_count }}</span></div>
         <progress value="{{ row.acknowledged_count }}" max="{{ row.slide_count }}">{{ row.acknowledged_count }} of {{ row.slide_count }}</progress>
         <div class="actions"><a class="button" href="{{ row.next_action.url }}">{{ row.next_action.label }}</a><a href="{% url 'assignment_detail' row.assignment.id %}">Assignment details</a></div>
       </section>

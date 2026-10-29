@@ -16,8 +16,8 @@
       {% endif %}
     </section>
   {% endif %}
-  <p>This page shows saved content only. Save changes in the slide or quiz editor before reviewing again.</p>
-  <p>Publishing makes this version immutable. It does not assign the training automatically.</p>
+  <p>Save your latest changes before publishing.</p>
+  <p>Publish when you’re ready. You can assign the training afterward.</p>
   {% if blocker_groups %}
     <section class="error" aria-labelledby="blockers-heading">
       <h2 id="blockers-heading">Fix these items before publication</h2>
@@ -30,13 +30,13 @@
   <section class="card">
     <h2>{{ version.title|default:"Untitled training" }}</h2>
     {% if version.description %}<div class="plain-text">{{ version.description }}</div>{% else %}<p class="muted">No description.</p>{% endif %}
-    <p>{{ slide_count }} slide{{ slide_count|pluralize }} in saved order</p>
+    <p>{{ slide_count }} {% if version.content_format == 'documents' %}document{{ slide_count|pluralize }}{% else %}slide{{ slide_count|pluralize }}{% endif %} in saved order</p>
   </section>
   {% for slide in slides %}
     <section class="card">
-      <p class="muted">Slide {{ slide.position }}</p>
+      <p class="muted">{% if version.content_format == "documents" %}{{ slide.path }}{% else %}Slide {{ slide.position }}{% endif %}</p>
       <h2 class="plain-text">{{ slide.header|default:"Untitled slide" }}</h2>
-      <div class="plain-text">{{ slide.body }}</div>
+      {% if version.content_format == "documents" %}<div class="document-reading">{{ slide.rendered_body }}</div>{% else %}<div class="plain-text">{{ slide.body }}</div>{% endif %}
       {% if slide.footer %}<hr><div class="plain-text muted">{{ slide.footer }}</div>{% endif %}
     </section>
   {% endfor %}
@@ -63,6 +63,6 @@
       <button type="submit">Publish version {{ version.version_number }}</button>
     </form>
   {% endif %}
-  {% if not published_conflict %}<div class="actions"><a href="{% url 'draft_editor' version.training_id %}">Edit slides</a><a href="{% url 'quiz_editor' version.training_id %}">Edit quiz</a></div>{% endif %}
+  {% if not published_conflict %}<div class="actions"><a href="{% url 'draft_editor' version.training_id %}">Edit content</a><a href="{% url 'quiz_editor' version.training_id %}">Edit quiz</a></div>{% endif %}
   {% if conflict %}<script>document.getElementById("review-conflict").focus();</script>{% endif %}
 {% endblock %}

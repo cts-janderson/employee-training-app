@@ -191,7 +191,9 @@ def assignment_status(assignment, *, now=None):
 
 
 def slides_acknowledged(assignment):
-    return assignment.slide_progress.count() == assignment.version.slides.count()
+    # Kept as a compatibility name for quiz callers; dispatch by assigned format.
+    from .learning_content import complete
+    return complete(assignment)
 
 
 def learner_next_step(assignment, slides, acknowledged_ids, has_quiz):
@@ -199,7 +201,7 @@ def learner_next_step(assignment, slides, acknowledged_ids, has_quiz):
         return "review", None
     remaining = [slide for slide in slides if slide.id not in acknowledged_ids]
     if remaining:
-        saved = next((slide for slide in remaining if slide.id == assignment.resume_slide_id), None)
+        saved = next((slide for slide in remaining if slide.id == (getattr(assignment, "resume_document_id", None) or assignment.resume_slide_id)), None)
         return ("resume" if assignment.started_at else "start"), saved or remaining[0]
     if has_quiz:
         return "take_quiz", None
@@ -711,3 +713,26 @@ def acknowledge_slide(*, assignment_id, slide_id, employee, now=None):
         if completed:
             assignment_ended(assignment, now=now)
         return assignment
+
+
+@transaction.atomic
+def visit_document(*, assignment_id, document_id, employee, now=None, acknowledge=False):
+    from .models import AssignmentDocumentProgress, OutlineItem
+
+    now = now or timezone.now()
+    assignment = _owned_assignment(assignment_id, employee)
+    document = OutlineItem.objects.get(pk=document_id, kind="document")
+    if assignment.version.content_format != "documents" or document.version_id != assignment.version_id:
+        raise AssignmentAccessError("This document is not in the assigned version.")
+    if not assignment.completed_at:
+        if not assignment.started_at:
+            assignment.started_at = now
+        assignment.resume_document = document
+        if acknowledge:
+            AssignmentDocumentProgress.objects.get_or_create(assignment=assignment, document=document,
+                defaults={"acknowledged_at": now})
+        completed = _complete_if_satisfied(assignment, now=now)
+        assignment.save(update_fields=["started_at", "resume_document", "completed_at"])
+        if completed:
+            assignment_ended(assignment, now=now)
+    return assignment, document

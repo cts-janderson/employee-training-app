@@ -4,7 +4,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
-from .authoring_ui import quiz_errors, quiz_focus_target, record_save, saved_question_rows, submitted_question_rows
+from .authoring_ui import quiz_errors, quiz_focus_target, quiz_workspace, record_save, saved_question_rows, submitted_question_rows
 from .browsing import browse, safe_return_to
 from .dev_auth import demo_admin_required
 from .models import Quiz, TrainingVersion
@@ -39,6 +39,7 @@ def _render_library_editor(request, quiz, questions, threshold, title, *, messag
         links = [{"message": title_error, "href": "#quiz-title"},
                  *[link for link in links if link["message"] != title_error]]
     return render(request, "training/quiz_editor.html", {
+        **quiz_workspace(quiz, library=True),
         "library": True, "version": quiz, "library_quiz": quiz,
         "quiz_id": quiz.id,
         "quiz_present": True, "questions": questions,

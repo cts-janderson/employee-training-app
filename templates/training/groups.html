@@ -1,7 +1,7 @@
 {% extends "training/base.html" %}
 {% block title %}Groups · Employee Training{% endblock %}
 {% block content %}
-  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Groups</h1><p class="muted">Organize employees for assignment review. Membership is checked when an assignment is submitted.</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Groups</h1><p class="muted">Bring people together to assign training to a group.</p></div></div>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   <form class="card employee-form" method="post" action="{% url 'group_list' %}">{% csrf_token %}
     <h2>Create group</h2>

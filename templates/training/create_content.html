@@ -1,0 +1,31 @@
+{% extends 'training/base.html' %}
+{% load static %}
+{% block title %}Create content · Employee Training{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'training/authoring.css' %}">{% endblock %}
+{% block content %}
+<div class="authoring-shell creation-page">
+  <nav class="authoring-breadcrumb" aria-label="Breadcrumb"><a href="{% url 'training_list' %}">Training library</a><span aria-hidden="true">/</span><span>Create content</span></nav>
+  <header class="creation-heading"><p class="eyebrow">A new beginning</p><h1>Turn what you know<br>into something others can learn.</h1><p>Start with a blank page, bring your existing material, or build an assessment.</p></header>
+  <div class="creation-options">
+    <article class="creation-option creation-option-primary">
+      <div class="creation-option-top"><span class="creation-icon">{% include 'training/_authoring_icon.html' with icon='document' %}</span><span class="creation-label">Start from scratch</span></div>
+      <div class="creation-paper-art" aria-hidden="true"><div class="creation-paper-back"></div><div class="creation-paper-front"><span></span><i></i><i></i><i></i><b></b></div></div>
+      <div class="creation-option-copy"><h2>A new training</h2><p>Give your knowledge a home. Write documents, organize them into sections, and add a quiz when you need one.</p></div>
+      <form method="post" action="{% url 'new_training' %}">{% csrf_token %}<input type="hidden" name="content_format" value="documents"><button type="submit">Create training {% include 'training/_authoring_icon.html' with icon='arrow' %}</button></form>
+    </article>
+    <article class="creation-option">
+      <div class="creation-option-top"><span class="creation-icon creation-icon-teal">{% include 'training/_authoring_icon.html' with icon='import' %}</span><span class="creation-label">Bring your material</span></div>
+      <div class="creation-option-copy"><h2>Import a draft</h2><p>Start with a Markdown or text file. Review the conversion, then make it your own in the editor.</p></div>
+      <p class="creation-option-detail">One file → one document in a new training</p>
+      <a class="button secondary" href="{% url 'import_trainings' %}">Import training drafts {% include 'training/_authoring_icon.html' with icon='arrow' %}</a>
+    </article>
+    <article class="creation-option">
+      <div class="creation-option-top"><span class="creation-icon creation-icon-lilac">{% include 'training/_authoring_icon.html' with icon='quiz' %}</span><span class="creation-label">Check understanding</span></div>
+      <div class="creation-option-copy"><h2>A reusable quiz</h2><p>Build an assessment once, then attach an independent copy to any training draft.</p></div>
+      <p class="creation-option-detail">Four question formats · Save as you go</p>
+      <form method="post" action="{% url 'new_library_quiz' %}">{% csrf_token %}<button class="secondary" type="submit">Create library quiz {% include 'training/_authoring_icon.html' with icon='arrow' %}</button></form>
+    </article>
+  </div>
+  <p class="creation-reassurance"><span class="authoring-status-dot" aria-hidden="true"></span>Everything starts as a draft. Publish and assign only when you’re ready.</p>
+</div>
+{% endblock %}

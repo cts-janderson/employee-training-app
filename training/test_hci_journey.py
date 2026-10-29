@@ -109,7 +109,7 @@ class IntegratedHciJourneyTests(TestCase):
         process_ready_notifications(now=later)
         nudge.refresh_from_db()
         self.assertEqual(nudge.status, Notification.Status.SENT)
-        self.assertContains(self.client.get(queued_response.url), "Sent to local sink")
+        self.assertContains(self.client.get(queued_response.url), "Processed")
 
         self.assertEqual(self.client.post(reverse("cancel_assignment", args=[overdue_assignment.id]), {
             "reason": "Updated material",

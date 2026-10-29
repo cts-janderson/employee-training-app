@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .authoring_ui import (
-    quiz_errors, quiz_focus_target, record_save, saved_question_rows, submitted_question_rows,
+    quiz_errors, quiz_focus_target, quiz_workspace, record_save, saved_question_rows, submitted_question_rows,
 )
 from .dev_auth import demo_admin_required
 from .models import Quiz, TrainingVersion
@@ -34,6 +34,7 @@ def quiz_editor(request, training_id):
     quiz = Quiz.objects.filter(version=version).prefetch_related("questions__options").first()
     if request.method == "GET":
         return render(request, "training/quiz_editor.html", {
+            **quiz_workspace(quiz),
             "version": version, "quiz_present": quiz is not None,
             "quiz_id": quiz.id if quiz else None,
             "questions": saved_question_rows(quiz),
@@ -83,6 +84,7 @@ def _quiz_response(request, version, quiz, questions, threshold, revision, *,
                    server_questions=None, server_threshold=None):
     links, threshold_error = quiz_errors(messages or [], questions)
     return render(request, "training/quiz_editor.html", {
+        **quiz_workspace(quiz),
         "version": version, "quiz_present": quiz is not None or bool(questions) or "passing_percent" in request.POST,
         "quiz_id": quiz.id if quiz else None,
         "questions": questions, "threshold_value": threshold,

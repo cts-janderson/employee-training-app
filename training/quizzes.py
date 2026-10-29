@@ -124,7 +124,7 @@ def submit_quiz(*, assignment_id, employee, submission_id, answers, now=None):
         if assignment.completed_at:
             raise QuizSubmissionError("This assignment is already complete.")
         if not slides_acknowledged(assignment):
-            raise QuizSubmissionError("Acknowledge every slide before submitting the quiz.")
+            raise QuizSubmissionError("Acknowledge every document before submitting the quiz." if assignment.version.content_format == "documents" else "Acknowledge every slide before submitting the quiz.")
         if quiz.passing_percent is None or not 1 <= quiz.passing_percent <= 100:
             raise QuizSubmissionError("This quiz has an invalid passing threshold.")
         correct_count = sum(int(correct) for _, _, correct in normalized)

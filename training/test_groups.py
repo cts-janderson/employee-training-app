@@ -77,7 +77,7 @@ class GroupTests(TestCase):
         data = {"operation_id": str(uuid.uuid4()), "version_id": str(self.version.id),
                 "due_date": self.due_date, "recipient_source": "group", "group_id": str(self.group.id)}
         review = self.client.post(url, {**data, "action": "review"})
-        self.assertContains(review, "Membership is read again when you submit")
+        self.assertContains(review, "Group:")
         self.assertContains(review, "Alice")
         result = self.client.post(url, {**data, "action": "submit"})
         self.assertContains(result, "1 created")

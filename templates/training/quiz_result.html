@@ -1,9 +1,12 @@
 {% extends "training/base.html" %}
+{% load static %}
 {% block title %}Quiz result · Employee Training{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'training/quiz-learning.css' %}">{% endblock %}
 {% block content %}
+<div class="quiz-learning">
   <p class="quiz-back"><a href="{% url 'assignment_detail' assignment.id %}">← Assignment and attempt history</a></p>
   <div class="page-heading quiz-result-heading"><div><p class="eyebrow">Knowledge check</p><h1>{{ assignment.version.title }} quiz result</h1>
-    <p class="muted">Version {{ assignment.version.version_number }} · Due {{ assignment.due_date }} ({{ assignment.due_timezone }}) · {{ deadline }}</p></div></div>
+    <p class="muted">Version {{ assignment.version.version_number }} · Due {{ assignment.due_date }} · {{ deadline }}</p></div></div>
   <section class="card quiz-result-summary {% if attempt.passed %}quiz-passed{% else %}quiz-retry{% endif %}">
     <div class="quiz-result-score"><span class="badge {% if attempt.passed %}success{% else %}amber{% endif %}">{% if attempt.passed %}Passed{% else %}Did not pass{% endif %}</span><strong>{{ score }}%</strong><span>{{ attempt.correct_count }} of {{ attempt.question_count }} questions correct</span></div>
     <p class="quiz-result-date">Submitted {{ attempt.submitted_at }}</p>
@@ -26,4 +29,5 @@
     {% endfor %}
   </ol>
   {% if not attempt.passed and assignment.is_outstanding %}<p><a class="button" href="{% url 'take_quiz' assignment.id %}">Try again</a></p>{% endif %}
+</div>
 {% endblock %}

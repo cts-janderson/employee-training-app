@@ -65,6 +65,7 @@ class TrainingVersion(models.Model):
         DRAFT = "draft", "Draft"
         PUBLISHED = "published", "Published"
 
+    content_format = models.CharField(max_length=12, choices=[("slides", "Slides"), ("documents", "Documents")], default="slides")
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     training = models.ForeignKey(Training, on_delete=models.PROTECT, related_name="versions")
     version_number = models.PositiveIntegerField()
@@ -335,6 +336,7 @@ class Assignment(models.Model):
     assigned_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     resume_slide = models.ForeignKey(Slide, on_delete=models.PROTECT, null=True, blank=True, related_name="resume_assignments")
+    resume_document = models.ForeignKey("OutlineItem", on_delete=models.PROTECT, null=True, blank=True, related_name="resume_assignments")
     completed_at = models.DateTimeField(null=True, blank=True)
     canceled_at = models.DateTimeField(null=True, blank=True)
     waived_at = models.DateTimeField(null=True, blank=True)
@@ -690,3 +692,64 @@ class NotificationReconciliation(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError("A reconciliation decision cannot be deleted.")
+
+
+class ImportBatch(models.Model):
+    """Short-lived normalized import plan; never an attachment store."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="training_imports")
+    plan = models.JSONField(default=list)
+    revision = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    committed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    result_ids = models.JSONField(default=list)
+
+
+class OutlineItem(VersionContent):
+    """A section or a required document in one training version."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version = models.ForeignKey(TrainingVersion, on_delete=models.PROTECT, related_name="outline_items")
+    parent = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="children")
+    kind = models.CharField(max_length=10, choices=[("section", "Section"), ("document", "Document")])
+    position = models.PositiveIntegerField()
+    title = models.CharField(max_length=200, blank=True)
+    body = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(kind__in=["section", "document"]), name="valid_outline_kind"),
+            models.CheckConstraint(condition=Q(position__gte=1), name="outline_position_positive"),
+            models.UniqueConstraint(fields=["version", "parent", "position"], condition=Q(parent__isnull=False), name="unique_outline_sibling"),
+            models.UniqueConstraint(fields=["version", "position"], condition=Q(parent__isnull=True), name="unique_outline_root"),
+        ]
+
+    @property
+    def header(self):
+        return self.title
+
+    @property
+    def rendered_body(self):
+        from .documents import render_body
+        return render_body(self.body)
+
+
+class AssignmentDocumentProgress(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.PROTECT, related_name="document_progress")
+    document = models.ForeignKey(OutlineItem, on_delete=models.PROTECT, related_name="acknowledgments")
+    acknowledged_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["assignment", "document"], name="unique_document_acknowledgment")]
+
+    def save(self, *args, **kwargs):
+        if (self.document.kind != "document" or self.document.version_id != self.assignment.version_id
+                or self.document.version.status != "published"):
+            raise ValidationError("Acknowledge a document in the assigned published version.")
+        if self.pk:
+            raise ValidationError("Document acknowledgment evidence cannot be changed.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Document acknowledgment evidence cannot be deleted.")

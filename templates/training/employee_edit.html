@@ -3,7 +3,8 @@
 {% block content %}
   <p><a href="{{ back_url|default:'/employees/' }}">← Employees</a></p>
   <h1>Edit {{ employee.name }}</h1>
-  <p class="muted">Local sink address: {% if employee.verified_email == employee.email %}{{ employee.verified_email }} (synthetically confirmed){% else %}unverified — notifications will be blocked{% endif %}. Saving a .test address confirms it for local testing.</p>
+  <p><a href="{% url 'employee_report' employee.id %}">View training report</a></p>
+  <p class="muted">{% if employee.verified_email != employee.email %}Email updates are unavailable for this address.{% endif %}</p>
   {% if error %}<p class="error" role="alert"><a href="#employee-{{ error_field }}">{{ error }}</a></p>{% endif %}
   <form class="card stack" method="post">
     {% csrf_token %}

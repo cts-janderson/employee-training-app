@@ -3,37 +3,37 @@
 {% block content %}
   <p><a href="{% url 'my_training' %}">← My training</a></p>
   <h1>{{ assignment.version.title }}</h1>
-  <p>Version {{ assignment.version.version_number }} · Due {{ assignment.due_date }} ({{ assignment.due_timezone }})</p>
-  <p>Progress: {{ progress }} · Deadline: {{ deadline }} · {{ acknowledged_count }} of {{ slide_count }} slides acknowledged</p>
-  {% if slide_acknowledged %}<p role="status">Slide acknowledged. {{ remaining_count }} acknowledgment{{ remaining_count|pluralize }} remaining.</p>{% endif %}
+  <p>Version {{ assignment.version.version_number }} · Due {{ assignment.due_date }}</p>
+  <p>Progress: {{ progress }} · Deadline: {{ deadline }} · {{ acknowledged_count }} of {{ slide_count }} {% if assignment.version.content_format == 'documents' %}documents{% else %}slides{% endif %} acknowledged</p>
+  {% if slide_acknowledged %}<p role="status">{% if assignment.version.content_format == 'documents' %}Document{% else %}Slide{% endif %} acknowledged. {{ remaining_count }} acknowledgment{{ remaining_count|pluralize }} remaining.</p>{% endif %}
   {% if assignment.waived_at %}
-    <section class="card" role="status"><h2>Assignment waived</h2><p>Waived {{ assignment.waived_at }}. You can review the slides and attempt history below.</p></section>
+    <section class="card" role="status"><h2>Assignment waived</h2><p>Waived {{ assignment.waived_at }}. You can review the {% if assignment.version.content_format == 'documents' %}documents{% else %}slides{% endif %} and attempt history below.</p></section>
   {% elif assignment.completed_at %}
     <section class="card" role="status"><h2>Training complete</h2>
-      {% if quiz %}<p>You passed the quiz and completed this assignment.</p>{% else %}<p>You acknowledged every slide. This assignment is complete.</p>{% endif %}
-      <p>Completed {{ assignment.completed_at }} · {{ deadline }}. You can still review the slides{% if quiz %} and quiz attempt history{% endif %} below.</p>
+      {% if quiz %}<p>You passed the quiz and completed this assignment.</p>{% else %}<p>You acknowledged every {% if assignment.version.content_format == 'documents' %}document{% else %}slide{% endif %}. This assignment is complete.</p>{% endif %}
+      <p>Completed {{ assignment.completed_at }} · {{ deadline }}. You can still review the {% if assignment.version.content_format == 'documents' %}documents{% else %}slides{% endif %}{% if quiz %} and quiz attempt history{% endif %} below.</p>
     </section>
   {% elif next_action.label == "Take quiz" %}
-    <section class="card"><h2>Slides complete — take the quiz</h2><p>You acknowledged every slide. Pass the quiz to complete this assignment.{% if attempts %} Try quiz again when ready.{% endif %}</p><a class="button" href="{{ next_action.url }}">Take quiz</a></section>
+    <section class="card"><h2>{% if assignment.version.content_format == 'documents' %}Documents{% else %}Slides{% endif %} complete — take the quiz</h2><p>You acknowledged every {% if assignment.version.content_format == 'documents' %}document{% else %}slide{% endif %}. Pass the quiz to complete this assignment.{% if attempts %} Try quiz again when ready.{% endif %}</p><a class="button" href="{{ next_action.url }}">Take quiz</a></section>
   {% elif next_action.label == "Review" %}
     <section class="card"><h2>Review your assignment</h2><p>Your saved progress is below.</p></section>
   {% else %}
-    <section class="card"><h2>Next: {{ next_action.label }} slide {{ next_action.target.position }}</h2>
+    <section class="card"><h2>Next: {{ next_action.label }} {% if assignment.version.content_format == 'documents' %}document{% else %}slide{% endif %} {{ next_action.target.position }}</h2>
       <p>{{ remaining_count }} acknowledgment{{ remaining_count|pluralize }} remaining.{% if assignment.resume_slide_id == next_action.target.id %} Your saved position is ready.{% endif %}</p>
-      <a class="button" href="{{ next_action.url }}">{% if assignment.resume_slide_id == next_action.target.id %}Resume at saved slide: {% else %}{{ next_action.label }} at {% endif %}{{ next_action.target.header }}</a>
+      <a class="button" href="{{ next_action.url }}">{% if assignment.resume_slide_id == next_action.target.id %}Resume at saved {% if assignment.version.content_format == 'documents' %}document{% else %}slide{% endif %}: {% else %}{{ next_action.label }} at {% endif %}{{ next_action.target.header }}</a>
     </section>
   {% endif %}
-  <h2>Slides</h2>
+  <h2>{% if assignment.version.content_format == 'documents' %}Documents{% else %}Slides{% endif %}</h2>
   <ol>
     {% for row in rows %}
-      <li><a href="{% url 'assignment_slide' assignment.id row.slide.id %}">{{ row.slide.header }}</a> — {% if row.acknowledged %}Acknowledged{% else %}Needs acknowledgment{% endif %}</li>
+      <li><a href="{% if assignment.version.content_format == 'documents' %}{% url 'assignment_document' assignment.id row.slide.id %}{% else %}{% url 'assignment_slide' assignment.id row.slide.id %}{% endif %}">{{ row.slide.path|default:row.slide.header }}</a> — {% if row.acknowledged %}Acknowledged{% else %}Needs acknowledgment{% endif %}</li>
     {% endfor %}
   </ol>
   {% if assignment.version.materials.exists %}<section class="card"><h2>Supporting material</h2><ul>{% for material in assignment.version.materials.all %}<li><a href="{{ material.url }}" target="_blank" rel="noopener noreferrer">{{ material.name }}<span class="visually-hidden"> (opens in a new tab)</span></a>{% if material.description %}<p>{{ material.description }}</p>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
-  <p class="muted">Opening a slide does not acknowledge it. Use the acknowledgment button on each slide.</p>
+  <p class="muted">Opening a {% if assignment.version.content_format == 'documents' %}document{% else %}slide{% endif %} does not acknowledge it. Use the acknowledgment button on each {% if assignment.version.content_format == 'documents' %}document{% else %}slide{% endif %}.</p>
   {% if quiz %}
     <h2>Quiz</h2>
-    {% if not quiz_ready %}<p>Acknowledge every slide to open the quiz.</p>{% endif %}
+    {% if not quiz_ready %}<p>Acknowledge every {% if assignment.version.content_format == 'documents' %}document{% else %}slide{% endif %} to open the quiz.</p>{% endif %}
     <h3>Attempt history</h3>
     {% for row in attempts %}
       <p><a href="{% url 'quiz_result' assignment.id row.attempt.id %}">{{ row.attempt.submitted_at }}</a> · {{ row.score }}% · {% if row.attempt.passed %}Passed{% else %}Did not pass{% endif %}</p>

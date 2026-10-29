@@ -29,3 +29,6 @@ training-status-*.csv
 
 # Operating system metadata.
 .DS_Store
+
+# Frontend build dependencies.
+node_modules/

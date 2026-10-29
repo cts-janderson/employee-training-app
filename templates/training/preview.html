@@ -5,7 +5,7 @@
   <h1>{{ version.title|default:"Untitled training" }}</h1>
   <p class="muted">Version {{ version.version_number }} · {{ version.get_status_display }}</p>
   {% if version.status == "draft" %}<p><a class="button" href="{% url 'draft_editor' version.training_id %}">Back to editor</a></p>{% endif %}
-  {% if version.status == "published" %}<section class="card" role="status"><h2>Version {{ version.version_number }} published</h2><p>This version is immutable. Publishing did not assign it to employees.</p><a class="button" href="{% url 'assign_training' version.training_id %}?version_id={{ version.id }}">Assign training</a></section>{% endif %}
+  {% if version.status == "published" %}<section class="card" role="status"><h2>Version {{ version.version_number }} published</h2><p>This version is published and ready to assign.</p><a class="button" href="{% url 'assign_training' version.training_id %}?version_id={{ version.id }}">Assign training</a></section>{% endif %}
   {% if version.description %}<div class="plain-text card">{{ version.description }}</div>{% endif %}
   {% for slide in slides %}
     <section class="card reading-panel">

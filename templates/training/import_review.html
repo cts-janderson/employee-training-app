@@ -1,0 +1,12 @@
+{% extends 'training/base.html' %}
+{% block title %}Review import · Employee Training{% endblock %}
+{% block content %}
+<p><a href="{% url 'training_list' %}">Trainings</a> / Import drafts</p><p class="eyebrow">Step 2 of 3 · Review plan</p><h1>Review training drafts</h1>
+<p>{{ items|length }} file{{ items|length|pluralize }} → {{ items|length }} new draft{{ items|length|pluralize }}. Nothing will be published or assigned. This review expires one hour after selection.</p>
+{% if errors %}<div class="error-summary" role="alert" id="import-errors"><h2>Check this review</h2><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul><p>Valid files are retained below. Use Back to select corrected files.</p></div>{% endif %}
+<form method="post" action="{% url 'review_import' batch.id %}" class="stack">{% csrf_token %}<input type="hidden" name="revision" value="{{ batch.revision }}">
+{% for item in items %}<section class="card stack" aria-labelledby="file-{{ item.id }}"><h2 id="file-{{ item.id }}">{{ item.filename }}</h2><div><label for="title-{{ item.id }}">Proposed training title</label><input id="title-{{ item.id }}" name="title_{{ item.id }}" value="{{ item.title }}" maxlength="200" {% if errors %}aria-describedby="import-errors"{% endif %}></div><p>{% if item.content_format == "documents" %}1 document{% else %}{{ item.slides|length }} slide{{ item.slides|length|pluralize }}{% endif %}</p><ul class="muted">{% for warning in item.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+<details><summary>Preview converted content</summary>{% if item.content_format == "documents" %}{% for document in item.documents %}<div class="document-reading">{{ document.preview }}</div>{% endfor %}{% endif %}{% for slide in item.slides %}<article class="import-preview"><h3>{{ forloop.counter }}. {{ slide.header|default:'Untitled slide' }}</h3><pre>{{ slide.body }}</pre></article>{% endfor %}</details>
+<div><button class="secondary" name="action" value="remove:{{ item.id }}" formnovalidate>Remove {{ item.filename }}</button></div></section>{% empty %}<p>No files remain. Go back to select files.</p>{% endfor %}
+<div class="button-row"><button name="action" value="commit" {% if not items %}disabled{% endif %}>Create {{ items|length }} draft{{ items|length|pluralize }}</button><button class="secondary" name="action" value="save">Save title edits</button><a href="{% url 'import_trainings' %}">Back to select files</a><a href="{% url 'training_list' %}">Cancel</a></div>
+</form>{% endblock %}

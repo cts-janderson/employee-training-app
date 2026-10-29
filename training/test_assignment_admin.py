@@ -167,7 +167,7 @@ class AssignmentAdministrationTests(TestCase):
         self.assertEqual((event.old_due_date, event.new_due_date), (old_date, new_date))
         self.assertEqual((event.old_due_revision, event.new_due_revision), (0, 1))
         self.assertEqual(event.actor_id, self.admin.id)
-        self.assertContains(self.client.get(reverse("assignment_admin_detail", args=[assignment.id])), "Deadline revision 0 → 1")
+        self.assertContains(self.client.get(reverse("assignment_admin_detail", args=[assignment.id])), "Deadline changed")
         self.assertEqual(self.client.post(reverse("change_deadline", args=[assignment.id]), {
             "due_date": new_date.isoformat(),
         }).status_code, 302)

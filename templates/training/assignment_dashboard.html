@@ -80,9 +80,9 @@
       <span class="person-avatar" aria-hidden="true">{{ row.assignment.employee.name|first|upper|default:"?" }}</span>
         <div class="record-main">
           <h3 id="assignment-{{ row.assignment.id }}">{{ row.assignment.employee.name }} · {{ row.assignment.version.title }}</h3>
-          <p class="record-subtitle">Due {{ row.assignment.due_date }} ({{ row.assignment.due_timezone }}){% if row.assignment.version.version_number > 1 %} · Version {{ row.assignment.version.version_number }}{% endif %}{% if row.assignment.cycle_number > 1 %} · Cycle {{ row.assignment.cycle_number }}{% endif %}{% if not row.assignment.employee.is_active %} · Inactive employee{% endif %}</p>
-          {% if row.next_scheduled_reminder %}<p class="record-subtitle">Next reminder: {{ row.next_scheduled_reminder.get_kind_display }} at {% timezone org_time_zone %}{{ row.next_scheduled_reminder.scheduled_at }}{% endtimezone %} ({{ org_time_zone }})</p>{% endif %}
-          {% if row.manual_next_at %}<p class="record-subtitle">Rate limited until {% timezone org_time_zone %}{{ row.manual_next_at }}{% endtimezone %} ({{ org_time_zone }}). Manual reminder unavailable.</p>{% endif %}
+          <p class="record-subtitle">Due {{ row.assignment.due_date }}{% if row.assignment.version.version_number > 1 %} · Version {{ row.assignment.version.version_number }}{% endif %}{% if row.assignment.cycle_number > 1 %} · Cycle {{ row.assignment.cycle_number }}{% endif %}{% if not row.assignment.employee.is_active %} · Inactive employee{% endif %}</p>
+          {% if row.next_scheduled_reminder %}<p class="record-subtitle">Next reminder: {{ row.next_scheduled_reminder.get_kind_display }} at {% timezone org_time_zone %}{{ row.next_scheduled_reminder.scheduled_at }}{% endtimezone %}</p>{% endif %}
+          {% if row.manual_next_at %}<p class="record-subtitle">Another reminder is available after {% timezone org_time_zone %}{{ row.manual_next_at }}{% endtimezone %}</p>{% endif %}
           <details class="record-details"><summary>Scores and timing</summary><p>Latest score: {{ row.latest_score }} · Passing score: {{ row.passing_score }} · Completed: {{ row.assignment.completed_at|default:"—" }}</p></details>
         </div>
       </div>

@@ -1,17 +1,26 @@
 {% extends "training/base.html" %}
+{% load static %}
+{% block extra_head %}<script src="{% static 'training/create-menu.js' %}?v=2" defer></script>{% endblock %}
 {% block title %}Trainings · Employee Training{% endblock %}
 {% block content %}
   <div class="page-heading">
-    <div><p class="eyebrow">Manage learning</p><h1>Trainings</h1><p class="muted">Create, revise, and assign training. Use synthetic content only in this local workspace.</p></div>
-    <form method="post" action="{% url 'new_training' %}">{% csrf_token %}<button type="submit">Create training</button></form>
+    <div><p class="eyebrow">Manage learning</p><h1>Trainings</h1><p class="muted">Create, organize, and share training with your team.</p></div>
+    <div class="create-menu">
+      <a class="button create-menu-fallback" href="{% url 'create_content' %}">Create content</a>
+      <button type="button" class="create-menu-trigger" aria-expanded="false" aria-controls="create-content-options" hidden>Create content <span aria-hidden="true">▾</span></button>
+      <div id="create-content-options" class="create-menu-options" hidden>
+        {% include 'training/_creation_actions.html' %}
+      </div>
+    </div>
   </div>
   <div class="section-heading"><h2>Training library</h2><span class="section-count">{{ browse.total }} training{{ browse.total|pluralize }}</span></div>
   <nav class="library-filters" aria-label="Filter trainings">
-    <a href="?q={{ browse.query|urlencode }}" {% if not status_filter %}aria-current="page"{% endif %}>All</a>
-    <a href="?status=draft&amp;q={{ browse.query|urlencode }}" {% if status_filter == "draft" %}aria-current="page"{% endif %}>Has draft</a>
-    <a href="?status=published&amp;q={{ browse.query|urlencode }}" {% if status_filter == "published" %}aria-current="page"{% endif %}>Published</a>
+    <a href="?q={{ browse.query|urlencode }}&amp;sort={{ sort }}" {% if not status_filter %}aria-current="page"{% endif %}>All</a>
+    <a href="?status=draft&amp;q={{ browse.query|urlencode }}&amp;sort={{ sort }}" {% if status_filter == "draft" %}aria-current="page"{% endif %}>Has draft</a>
+    <a href="?status=published&amp;q={{ browse.query|urlencode }}&amp;sort={{ sort }}" {% if status_filter == "published" %}aria-current="page"{% endif %}>Published</a>
   </nav>
   {% with browse_label="trainings" %}{% include "training/_browse_controls.html" %}{% endwith %}
+  <form method="get" class="library-sort"><input type="hidden" name="q" value="{{ browse.query }}"><input type="hidden" name="status" value="{{ status_filter }}"><label for="library-sort">Sort by</label><select id="library-sort" name="sort"><option value="title" {% if sort == 'title' %}selected{% endif %}>Title A–Z</option><option value="-title" {% if sort == '-title' %}selected{% endif %}>Title Z–A</option></select><button class="secondary">Sort</button></form>
   <div class="collection-panel training-library" aria-label="Training library results">
     {% if rows %}<div class="training-library-header" aria-hidden="true"><span>Training</span><span>Versions</span><span>Actions</span></div>{% endif %}
     {% for row in rows %}
@@ -28,6 +37,8 @@
             {% if row.latest %}<span class="badge success">Published v{{ row.latest.version_number }}</span>{% endif %}
             {% if row.draft %}<span class="badge amber">Draft v{{ row.draft.version_number }}</span>{% endif %}
           </div>
+          {% if row.latest %}<p class="muted">Published v{{ row.latest.version_number }}: {% if row.latest.content_format == "documents" %}{{ row.latest.document_count }} document{{ row.latest.document_count|pluralize }}{% else %}{{ row.latest.slide_count }} slide{{ row.latest.slide_count|pluralize }}{% endif %} · {% if row.latest.has_quiz %}Quiz included{% else %}No quiz{% endif %}</p>{% endif %}
+          {% if row.draft %}<p class="muted">Draft v{{ row.draft.version_number }}: {% if row.draft.content_format == "documents" %}{{ row.draft.document_count }} document{{ row.draft.document_count|pluralize }}{% else %}{{ row.draft.slide_count }} slide{{ row.draft.slide_count|pluralize }}{% endif %} · {% if row.draft.has_quiz %}Quiz included{% else %}No quiz{% endif %}</p>{% endif %}
           {% if row.published %}
             <details class="record-details training-library-history"><summary>Version history</summary>
               <ul>{% for version in row.published %}<li><a href="{% url 'preview' row.training.id version.id %}">Version {{ version.version_number }}: {{ version.title|default:"Untitled training" }}</a></li>{% endfor %}</ul>
@@ -35,9 +46,10 @@
           {% endif %}
         </div>
         <div class="training-library-actions">
-          {% if row.draft %}<a class="button" href="{% url 'draft_editor' row.training.id %}?return_to={{ browse.return_to|urlencode }}">Edit draft</a>{% else %}<form method="post" action="{% url 'new_revision' row.training.id %}">{% csrf_token %}<button type="submit">Start revision</button></form>{% endif %}
+          {% if row.draft %}<a class="button" href="{% url 'draft_editor' row.training.id %}?return_to={{ browse.return_to|urlencode }}">Edit draft</a>{% else %}<form method="post" action="{% url 'new_revision' row.training.id %}?return_to={{ browse.return_to|urlencode }}">{% csrf_token %}<input type="hidden" name="content_format" value="documents"><button type="submit">Start revision</button></form>{% endif %}
           {% if row.published %}<div class="training-library-action-links">
             <a class="text-action" href="{% url 'assign_training' row.training.id %}">Assign training</a>
+            <a class="text-action" href="{% url 'training_report' row.training.id %}">View report</a>
             {% if row.training.renewal_interval_months %}<a class="text-action" href="{% url 'renew_training' row.training.id %}">Review renewals</a>{% endif %}
           </div>{% endif %}
         </div>

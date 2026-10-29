@@ -3,11 +3,11 @@
 {% block content %}
   <p><a href="{% url 'training_list' %}">← Trainings</a></p>
   <h1>Renew training</h1>
-  <p>Administrators review due completions before creating the next assignment cycle.</p>
+  <p>Review completed training that is due for renewal.</p>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   {% if results %}<section class="card" role="status"><h2>Renewal results</h2><ul>{% for result in results %}<li>{{ result.employee.name }}: {{ result.get_outcome_display }} — {{ result.detail }}</li>{% endfor %}</ul></section>{% endif %}
   {% if review %}
-    <section class="card"><h2>Review renewal</h2><p>{{ review.version.title }} · Due {{ review.due_date }} ({{ review.zone_name }})</p>
+    <section class="card"><h2>Review renewal</h2><p>{{ review.version.title }} · Due {{ review.due_date }}</p>
       <ul>{% for row in review.rows %}<li>{{ row.employee.name }} · Completed {{ row.renews.completed_at }} · Renewal date {{ row.renewal_date }} — {{ row.status }}</li>{% endfor %}</ul>
     </section>
     <form method="post">{% csrf_token %}<input type="hidden" name="operation_id" value="{{ operation_id }}"><input type="hidden" name="version_id" value="{{ review.version.id }}"><input type="hidden" name="as_of" value="{{ as_of }}"><input type="hidden" name="due_date" value="{{ due_date }}"><button type="submit" name="action" value="submit">Create renewal assignments</button></form>
@@ -15,7 +15,7 @@
     <form class="card stack" method="post">{% csrf_token %}<input type="hidden" name="operation_id" value="{{ operation_id }}">
       <label for="version">Published version</label><select id="version" name="version_id">{% for version in versions %}<option value="{{ version.id }}" {% if version.id|stringformat:'s' == selected_version_id %}selected{% endif %}>Version {{ version.version_number }}: {{ version.title }}</option>{% endfor %}</select>
       <label for="as-of">Renewal date on or before</label><input id="as-of" name="as_of" type="date" value="{{ as_of }}" required>
-      <label for="due-date">New assignment due date ({{ org_time_zone }})</label><input id="due-date" name="due_date" type="date" value="{{ due_date }}" required>
+      <label for="due-date">New assignment due date</label><input id="due-date" name="due_date" type="date" value="{{ due_date }}" required>
       <button type="submit" name="action" value="review">Review renewals</button>
     </form>
   {% endif %}

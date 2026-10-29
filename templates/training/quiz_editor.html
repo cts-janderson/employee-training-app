@@ -1,23 +1,25 @@
 {% extends "training/base.html" %}
+{% load static %}
 {% block title %}Edit quiz · Employee Training{% endblock %}
+{% block extra_head %}{% if library %}<link rel="stylesheet" href="{% static 'training/authoring.css' %}"><link rel="stylesheet" href="{% static 'training/quiz-authoring.css' %}">{% endif %}{% endblock %}
 {% block content %}
-  <p class="quiz-back">{% if library %}<a href="{{ back_url|default:'/quizzes/' }}">← Quiz library</a>{% else %}<a href="{% url 'draft_editor' version.training_id %}">← Training draft</a>{% endif %}</p>
+<div id="quiz-editor-workspace" data-quiz-editor {% if library %}class="authoring-shell library-quiz-authoring"{% endif %}>
+  {% if library %}<nav class="authoring-breadcrumb" aria-label="Breadcrumb"><a href="{{ back_url|default:'/quizzes/' }}">Quiz library</a><span aria-hidden="true">/</span><span>Edit quiz</span></nav>{% else %}<p class="quiz-back"><a href="{% url 'draft_editor' version.training_id %}">← Training draft</a></p>{% endif %}
   <div class="page-heading quiz-editor-heading">
-    <div><p class="eyebrow">Quiz authoring</p><h1>{% if library %}Edit library quiz{% else %}Quiz for version {{ version.version_number }}{% endif %}</h1>
-      <p class="muted">{% if library %}Save unfinished questions at any time. A titled, complete quiz can be copied into a training draft; later edits to this library quiz will not change that copy.{% else %}Save unfinished questions at any time. Publish the training from its draft page when the quiz is complete.{% endif %}</p>
+    <div><p class="eyebrow">{% if library %}Reusable assessments{% else %}Quiz authoring{% endif %}</p><h1>{% if library %}Edit library quiz{% else %}Quiz for version {{ version.version_number }}{% endif %}</h1>
+      <p class="muted">{% if library %}Create a reusable assessment, one clear question at a time. Save unfinished work and come back whenever you’re ready.{% else %}Save unfinished questions at any time. Publish the training from its draft page when the quiz is complete.{% endif %}</p>
     </div>
-    {% if quiz_present and not conflict %}<button type="submit" form="editor-form" name="action" value="save">Save quiz</button>{% endif %}
+    {% if library %}<div class="quiz-header-actions">{% if quiz_id and not conflict %}<a class="button secondary" href="{% url 'quiz_learner_preview' quiz_id %}">{% include 'training/_authoring_icon.html' with icon='eye' %} Preview saved quiz</a>{% endif %}{% if quiz_present and not conflict %}<button type="submit" form="editor-form" name="action" value="save">Save quiz</button>{% endif %}</div>{% elif quiz_present and not conflict %}<button type="submit" form="editor-form" name="action" value="save">Save quiz</button>{% endif %}
   </div>
   {% if not library and version.status == "draft" %}<p class="quiz-editor-link"><a href="{% url 'attach_library_quiz' version.training_id %}">Attach or replace with a library quiz</a></p>{% endif %}
-  {% if quiz_id %}<p class="quiz-editor-link"><a href="{% url 'quiz_learner_preview' quiz_id %}">Preview saved quiz as learner</a></p>{% endif %}
   {% if conflict %}
-    <section class="error" role="alert" aria-labelledby="conflict-heading">
+    <section class="error" role="alert" aria-labelledby="conflict-heading" id="quiz-conflict" tabindex="-1">
       <h2 id="conflict-heading">{% if published_conflict %}This version was published{% elif library %}A newer library quiz was saved{% else %}A newer draft was saved{% endif %}</h2>
-      <p>Your submitted quiz changes were not saved. The server is at revision {{ version.revision }}. Compare the saved quiz below with your submitted fields.</p>
-      {% if not published_conflict %}<p>Applying your changes will replace the saved quiz content. Another save made after this page loaded will be rejected.</p>{% endif %}
+      <p>Your submitted quiz changes were not saved. Compare the latest saved quiz below with your changes.</p>
+      {% if not published_conflict %}<p>Saving your changes will replace the latest saved quiz shown below.</p>{% endif %}
     </section>
     <details class="card" open>
-      <summary><strong>Current saved revision {{ version.revision }}</strong></summary>
+      <summary><strong>Latest saved copy</strong></summary>
       {% if library %}<p>Title: {{ library_quiz.title|default:"(empty)" }}</p>{% endif %}
       <p>Passing threshold: {{ server_threshold|default:"(unset)" }}</p>
       <ol>{% for question in server_questions %}
@@ -27,7 +29,8 @@
       {% empty %}<li>No saved questions.</li>{% endfor %}</ol>
     </details>
   {% endif %}
-  <p id="save-state" class="quiz-save-state" role="status">{% if saved_notice %}{{ saved_notice }}{% elif request.method == "POST" %}Unsaved changes are shown below.{% else %}Showing saved revision {{ version.revision }}.{% endif %}</p>
+  <p id="save-state" class="quiz-save-state" role="status">{% if saved_notice %}{{ saved_notice }}{% elif request.method == "POST" %}Unsaved changes are shown below.{% else %}All changes saved.{% endif %}</p>
+  <p id="quiz-request-status" class="quiz-request-status" role="status" tabindex="-1" aria-live="polite"></p>
   {% if errors %}
     <div class="error" role="alert" id="quiz-editor-errors" tabindex="-1">
       <h2>Check this quiz</h2>
@@ -35,7 +38,9 @@
     </div>
   {% endif %}
   {% if quiz_present %}
-    <details class="card quiz-outline">
+    <nav class="quiz-workspace-nav" aria-label="Quiz workspace"><a href="#quiz-setup">1. Setup</a><a href="#quiz-questions">2. Questions</a><a href="#quiz-review">3. Review</a></nav>
+    {% if library %}<div class="library-quiz-workspace">{% endif %}
+    <details class="card quiz-outline" {% if library %}open{% endif %}>
       <summary><strong>Quiz outline · {{ questions|length }} question{{ questions|length|pluralize }}</strong></summary>
       <nav aria-label="Quiz outline">
         <ol>
@@ -44,28 +49,40 @@
           <li><a href="#quiz-actions">Add and save</a></li>
         </ol>
       </nav>
+      {% if library %}<div class="library-quiz-outline-note"><span>{% include 'training/_authoring_icon.html' with icon='quiz' %}</span><p>Build once. Reuse with confidence.</p><small>Attach an independent copy to a training draft. Later edits won’t change existing copies.</small></div>{% endif %}
     </details>
     <form method="post" id="editor-form" tabindex="-1" data-unsaved="{% if request.method == 'POST' and not saved_notice %}true{% else %}false{% endif %}" novalidate>
       {% csrf_token %}
       <input type="hidden" name="revision" value="{{ form_revision|default:version.revision }}">
-      <div class="card quiz-settings">
-        {% if library %}<div><label for="quiz-title">Quiz title (required to attach)</label><input id="quiz-title" name="title" value="{{ title_value }}" maxlength="200" {% if title_error %}aria-invalid="true" aria-describedby="quiz-title-error"{% endif %}>{% if title_error %}<p class="field-error" id="quiz-title-error">{{ title_error }}</p>{% endif %}</div>{% endif %}
+      <section class="card stack" id="quiz-setup" tabindex="-1">
+        {% if library %}<div class="quiz-section-eyebrow">01 · The essentials</div>{% endif %}<h2>Setup</h2>
+        <p class="muted">{% if library %}Reusable library quiz · Attach an independent copy to a training draft after review.{% else %}Training quiz · Saved with this training version and reviewed when you publish it.{% endif %}</p>
+        <div class="quiz-settings">
+        {% if library %}<div><label for="quiz-title">Quiz title (required to attach)</label><input id="quiz-title" name="title" value="{{ title_value }}" maxlength="200" placeholder="e.g. Workplace safety check" {% if title_error %}aria-invalid="true" aria-describedby="quiz-title-error"{% endif %}>{% if title_error %}<p class="field-error" id="quiz-title-error">{{ title_error }}</p>{% endif %}</div>{% endif %}
         <div><label for="passing-percent">Passing threshold (required to publish; whole percent, 1–100)</label>
-          <input id="passing-percent" name="passing_percent" type="number" min="1" max="100" step="1" value="{{ threshold_value }}"
-                 {% if threshold_error %}aria-invalid="true" aria-describedby="threshold-error"{% endif %}>
-          <p class="quiz-field-help">A learner must meet or exceed this score to pass.</p>
+          <div class="quiz-threshold-control">
+            <input id="passing-percent" data-threshold-input name="passing_percent" type="number" min="1" max="100" step="1" value="{{ threshold_value }}"
+                   aria-describedby="threshold-help{% if threshold_error %} threshold-error{% endif %}" {% if threshold_error %}aria-invalid="true"{% endif %}>
+            <span class="quiz-threshold-number-wrap" data-threshold-number-wrap hidden>
+              <input id="passing-percent-number" data-threshold-number type="number" min="1" max="100" step="1" inputmode="numeric" aria-label="Passing threshold percentage (1–100)" aria-describedby="threshold-help{% if threshold_error %} threshold-error{% endif %}" {% if threshold_error %}aria-invalid="true"{% endif %} placeholder="Not set">
+              <span aria-hidden="true">%</span>
+            </span>
+          </div>
+          <div class="quiz-threshold-scale" data-threshold-scale hidden aria-hidden="true"><span>Not set</span><span>100%</span></div>
+          <p class="quiz-field-help" id="threshold-help">A learner must meet or exceed this score to pass.<span data-threshold-hint hidden> Type a percentage from 1–100 or use the slider. Clear the number or move all the way left to leave the draft threshold unset.</span></p>
           {% if threshold_error %}<p class="field-error" id="threshold-error">{{ threshold_error }}</p>{% endif %}</div>
-      </div>
-      <div class="quiz-questions-heading"><div><h2>Questions</h2><p class="muted">{{ questions|length }} question{{ questions|length|pluralize }} · Add a format, then write the prompt and answers.</p></div></div>
+        </div>
+      </section>
+      <div class="quiz-questions-heading" id="quiz-questions" tabindex="-1"><div>{% if library %}<div class="quiz-section-eyebrow">02 · Build understanding</div>{% endif %}<h2>Questions</h2><p class="muted">{{ questions|length }} question{{ questions|length|pluralize }} · Add a format, then write the prompt and answers.</p></div></div>
       {% if not conflict %}<div class="quiz-add-questions" aria-label="Add a question">
-        <button class="secondary" type="submit" name="action" value="add_single">Add single-choice question</button>
-        <button class="secondary" type="submit" name="action" value="add_true_false">Add true/false question</button>
-        <button class="secondary" type="submit" name="action" value="add_multiple">Add multiple-selection question</button>
-        <button class="secondary" type="submit" name="action" value="add_ordering">Add ordering question</button>
+        <button class="secondary" type="submit" name="action" value="add_single" {% if library %}aria-label="Add single-choice question"{% endif %}>{% if library %}<span class="quiz-format-symbol" aria-hidden="true">◉</span><span><strong>Single choice</strong><small>One correct answer</small></span>{% else %}Add single-choice question{% endif %}</button>
+        <button class="secondary" type="submit" name="action" value="add_true_false" {% if library %}aria-label="Add true/false question"{% endif %}>{% if library %}<span class="quiz-format-symbol" aria-hidden="true">T/F</span><span><strong>True / false</strong><small>A statement to check</small></span>{% else %}Add true/false question{% endif %}</button>
+        <button class="secondary" type="submit" name="action" value="add_multiple" {% if library %}aria-label="Add multiple-selection question"{% endif %}>{% if library %}<span class="quiz-format-symbol" aria-hidden="true">A+B</span><span><strong>Multiple selection</strong><small>Select every correct answer</small></span>{% else %}Add multiple-selection question{% endif %}</button>
+        <button class="secondary" type="submit" name="action" value="add_ordering" {% if library %}aria-label="Add ordering question"{% endif %}>{% if library %}<span class="quiz-format-symbol" aria-hidden="true">1–3</span><span><strong>Ordering</strong><small>Put steps in sequence</small></span>{% else %}Add ordering question{% endif %}</button>
       </div>{% endif %}
-      {% if not questions %}<p class="empty-state quiz-question-empty">{% if conflict %}No questions in these submitted changes.{% else %}No questions yet. Choose a question format above to start this quiz.{% endif %}</p>{% endif %}
+      {% if not questions %}{% if library %}<section class="library-quiz-empty"><span class="library-quiz-empty-icon">{% include 'training/_authoring_icon.html' with icon='quiz' %}</span><h3>{% if conflict %}No submitted questions{% else %}Make your first question count.{% endif %}</h3><p>{% if conflict %}No questions in these submitted changes.{% else %}Choose a format above, then add a prompt and answers.<br>You can save a question before it’s finished.{% endif %}</p></section>{% else %}<p class="empty-state quiz-question-empty">{% if conflict %}No questions in these submitted changes.{% else %}No questions yet. Choose a question format above to start this quiz.{% endif %}</p>{% endif %}{% endif %}
       {% for question in questions %}
-        <section class="card stack quiz-editor-question" id="question-{{ forloop.counter }}" aria-labelledby="question-heading-{{ question.id }}">
+        <section class="card stack quiz-editor-question" data-question-id="{{ question.id }}" id="question-{{ forloop.counter }}" aria-labelledby="question-heading-{{ question.id }}">
           <div class="quiz-question-heading"><h2 id="question-heading-{{ question.id }}" tabindex="-1">Question {{ forloop.counter }}</h2><span class="badge">{{ question.type_label }}</span>{% if request.method == "GET" %}<span class="badge {% if question.ready %}status-ready{% else %}status-needs-work{% endif %}">{% if question.ready %}Ready{% else %}Needs work{% endif %}</span>{% endif %}</div>
           <input type="hidden" name="question_id" value="{{ question.id }}">
           <input type="hidden" name="question_type" value="{{ question.type }}">
@@ -116,12 +133,28 @@
           </div>
         </section>
       {% endif %}
+      <section class="card stack" id="quiz-review" tabindex="-1" aria-labelledby="quiz-review-heading">
+        {% if library %}<div class="quiz-section-eyebrow">03 · A final look</div>{% endif %}<h2 id="quiz-review-heading">Review saved quiz</h2>
+        <p>Save your changes to refresh this review.</p>
+        <p data-quiz-review-unsaved {% if request.method == "GET" %}hidden{% endif %} role="status">Your current edits are unsaved. Preview and attachment use the saved quiz.</p>
+        {% if saved_readiness %}
+          <h3>Needs work before {% if library %}attachment{% else %}publication{% endif %}</h3>
+          <ul>{% for issue in saved_readiness %}<li><a href="{{ issue.href }}">{{ issue.message }}</a></li>{% endfor %}</ul>
+        {% elif saved_quiz_ready %}<p class="badge success">Ready for {% if library %}attachment{% else %}publication review{% endif %}</p>{% endif %}
+        {% if quiz_id %}<p><a href="{% url 'quiz_learner_preview' quiz_id %}">Preview saved quiz as learner</a></p>{% endif %}
+        {% if not conflict %}
+          {% if library and saved_quiz_ready %}
+            <h3>Attach a saved copy</h3><p>Later changes to either copy do not affect the other. Review any replacement before confirming.</p>
+            <ul>{% for draft in attachment_drafts %}<li><a href="{% url 'attach_library_quiz' draft.training_id %}?quiz={{ quiz_id }}">{{ draft.title|default:"Untitled training" }} · Version {{ draft.version_number }}</a></li>{% empty %}<li>No training drafts yet. <a href="{% url 'training_list' %}">Open the training library</a> to create one.</li>{% endfor %}</ul>
+          {% elif not library %}<p><a href="{% url 'publication_review' version.training_id %}">Review saved training for publication</a></p>{% endif %}
+        {% endif %}
+      </section>
       <div class="actions" id="quiz-actions" tabindex="-1">
         {% if conflict %}
           {% if published_conflict %}
             <a href="{% url 'preview' version.training_id version.id %}">Review published version</a>
           {% else %}
-            <button type="submit" name="action" value="save">Apply my quiz changes to revision {{ version.revision }}</button>
+            <button type="submit" name="action" value="save">Replace the saved quiz with my changes</button>
             <a href="{% if library %}{% url 'library_quiz_editor' library_quiz.id %}{% else %}{% url 'quiz_editor' version.training_id %}{% endif %}">Discard my changes and reload saved quiz</a>
           {% endif %}
         {% else %}
@@ -130,26 +163,10 @@
         {% endif %}
       </div>
     </form>
+    {% if library %}</div>{% endif %}
   {% else %}
     <form method="post" id="editor-form" tabindex="-1">{% csrf_token %}<input type="hidden" name="revision" value="{{ form_revision|default:version.revision }}"><button type="submit" name="action" value="add_quiz">Add quiz</button></form>
   {% endif %}
-  {% include "training/unsaved_warning.html" %}
-  {% if errors %}<script>document.getElementById("quiz-editor-errors").focus();</script>{% endif %}
-  {% if pending_remove %}<script>document.getElementById("remove-review").focus();</script>{% endif %}
-  <script>
-    if (location.hash && !document.getElementById("quiz-editor-errors")) {
-      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
-      if (target) target.focus();
-    }
-    document.querySelectorAll("[data-ordering-editor]").forEach((group) => {
-      const ranks = [...group.querySelectorAll('input[type="number"]')];
-      const warning = group.querySelector("[data-rank-warning]");
-      const update = () => {
-        const filled = ranks.map((rank) => rank.value.trim()).filter(Boolean);
-        warning.textContent = new Set(filled).size === filled.length ? "" : "Each ordering rank must be used only once.";
-      };
-      ranks.forEach((rank) => rank.addEventListener("input", update));
-      update();
-    });
-  </script>
+  </div>
+  <script src="{% static 'training/quiz-workspace.js' %}" defer></script>
 {% endblock %}

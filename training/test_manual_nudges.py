@@ -69,14 +69,14 @@ class ManualNudgeTests(TestCase):
         self.assertFalse(nudge.delivery_attempts.exists())
         queued_page = self.client.get(reverse("notification_detail", args=[nudge.id]))
         self.assertContains(queued_page, "Queued for delivery")
-        self.assertNotContains(queued_page, "Sent to local sink")
+        self.assertNotContains(queued_page, "Processed")
         self.assertEqual(len(process_ready_notifications(now=self.start)), 1)
         nudge.refresh_from_db()
         self.assertEqual(nudge.status, Notification.Status.SENT)
         self.assertEqual(nudge.delivery_attempts.get().recipient_email, self.employee.email)
         sent_page = self.client.get(reverse("notification_detail", args=[nudge.id]))
-        self.assertContains(sent_page, "Sent to local sink")
-        self.assertContains(self.client.get(reverse("notification_log")), "Sent to local sink")
+        self.assertContains(sent_page, "Processed")
+        self.assertContains(self.client.get(reverse("notification_log")), "Processed")
         self.assertIn("manual reminder", mail.outbox[0].subject)
         self.assertEqual(self.assignment.notifications.filter(kind=Notification.Kind.MANUAL_NUDGE).count(), 1)
 
@@ -177,16 +177,16 @@ class ManualNudgeTests(TestCase):
         nudge = self.assignment.notifications.get(kind=Notification.Kind.MANUAL_NUDGE)
         self.assertEqual(response.url, reverse("notification_detail", args=[nudge.id]))
         notification_page = self.client.get(response.url)
-        self.assertContains(notification_page, "Queued for the worker")
+        self.assertContains(notification_page, "This message is waiting to be processed.")
         self.assertContains(notification_page, "Requested by Admin")
         with patch("training.notifications.timezone.now", return_value=self.start + timedelta(hours=1)), \
              patch("training.assignment_admin_views.timezone.now", return_value=self.start + timedelta(hours=1)):
             repeat = self.client.post(reverse("send_manual_nudge", args=[self.assignment.id]))
         self.assertEqual(repeat.status_code, 429)
-        self.assertContains(repeat, "Next eligible manual reminder", status_code=429)
+        self.assertContains(repeat, "You can send another reminder after", status_code=429)
         with patch("training.assignment_admin_views.timezone.now", return_value=self.start + timedelta(hours=1)):
             limited_dashboard = self.client.get(reverse("assignment_dashboard"))
-        self.assertContains(limited_dashboard, "Rate limited until")
+        self.assertContains(limited_dashboard, "Another reminder is available after")
         self.client.post(reverse("demo_switch"), {"employee_id": str(self.employee.id)})
         self.assertEqual(self.client.post(reverse("send_manual_nudge", args=[self.assignment.id])).status_code, 403)
 

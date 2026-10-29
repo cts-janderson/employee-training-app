@@ -1,8 +1,8 @@
 {% extends "training/base.html" %}
-{% block title %}Switch demo employee · Employee Training{% endblock %}
+{% block title %}Switch profile · Employee Training{% endblock %}
 {% block content %}
-  <h1>Switch demo employee</h1>
-  <p class="muted">Local development only. This selector will be replaced by employee sign-in.</p>
+  <h1>Switch profile</h1>
+  <p class="muted">Choose a demo profile to continue.</p>
   {% for employee in employees %}
     <form class="card" method="post">
       {% csrf_token %}
@@ -11,6 +11,6 @@
       <span>{{ employee.get_role_display }}</span>
     </form>
   {% empty %}
-    <p>No active demo employees.</p>
+    <p>No active profiles.</p>
   {% endfor %}
 {% endblock %}

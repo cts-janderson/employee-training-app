@@ -1,0 +1,11 @@
+{% extends 'training/base.html' %}
+{% block title %}Import training drafts · Employee Training{% endblock %}
+{% block content %}
+<p><a href="{% url 'training_list' %}">Trainings</a> / Import drafts</p><p class="eyebrow">Step 1 of 3 · Select files</p><h1>Import training drafts</h1>
+<p>Create editable drafts from Markdown or plain text. Review the conversion before creating anything.</p>
+{% if errors %}<div class="error-summary" role="alert"><h2>Check your files</h2><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+<form method="post" action="{% url 'import_trainings' %}" enctype="multipart/form-data" class="card stack">{% csrf_token %}
+<label for="import-files">Select Markdown or text files</label><input id="import-files" type="file" name="files" accept=".md,.txt,text/plain,text/markdown" multiple required aria-describedby="import-file-help">
+<p id="import-file-help">Choose up to five Markdown or text files, at most 1 MB each. Each file becomes a document in a new training draft.</p>
+<button>Review files</button><a href="{% url 'training_list' %}">Cancel</a>
+</form>{% endblock %}

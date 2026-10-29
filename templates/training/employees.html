@@ -1,7 +1,7 @@
 {% extends "training/base.html" %}
 {% block title %}Employees · Employee Training{% endblock %}
 {% block content %}
-  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Employees</h1><p class="muted">Synthetic records for local development. Use .test email addresses.</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Employees</h1><p class="muted">Manage your team and their training.</p></div></div>
   {% if error %}<p class="error" role="alert"><a href="#employee-{{ error_field }}">{{ error }}</a></p>{% endif %}
   <form class="card employee-form" method="post">
     {% csrf_token %}
@@ -25,7 +25,7 @@
       <a class="text-action" href="{% url 'edit_employee' employee.id %}?return_to={{ browse.return_to|urlencode }}">View employee</a>
     </article>
   {% empty %}
-    <p class="empty-state">No synthetic employees yet.</p>
+    <p class="empty-state">No employees yet.</p>
   {% endfor %}
   </div>
 {% endblock %}

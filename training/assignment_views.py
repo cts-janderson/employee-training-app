@@ -25,6 +25,7 @@ from .assignments import (
 )
 from .dev_auth import demo_actor_required, demo_admin_required
 from .models import Assignment, AssignmentOperationResult, Employee, EmployeeGroup, Quiz, Slide, Training, TrainingVersion, UNTITLED_TRAINING
+from .learning_content import units, acknowledged_ids as content_acknowledged_ids
 from .quizzes import displayed_score
 from .renewals import set_renewal_interval
 
@@ -37,7 +38,7 @@ def _learner_next_action(assignment, slides, acknowledged_ids, has_quiz):
     if step in {"start", "resume"}:
         return {
             "label": "Resume" if step == "resume" else "Start",
-            "url": reverse("assignment_slide", args=[assignment.id, target.id]),
+            "url": reverse("assignment_document" if assignment.version.content_format == "documents" else "assignment_slide", args=[assignment.id, target.id]),
             "target": target,
         }
     return {"label": "Take quiz", "url": reverse("take_quiz", args=[assignment.id])}
@@ -202,7 +203,7 @@ def renew_training(request, training_id):
 def my_training(request):
     assignments = list(Assignment.objects.visible_to_learner(request.employee).select_related(
         "version", "resume_slide",
-    ).prefetch_related("version__slides", "slide_progress"))
+    ).prefetch_related("version__slides", "slide_progress", "version__outline_items", "document_progress"))
     quiz_version_ids = set(Quiz.objects.filter(
         version_id__in=[assignment.version_id for assignment in assignments],
     ).values_list("version_id", flat=True))
@@ -211,8 +212,8 @@ def my_training(request):
     completed = []
     waived = []
     for assignment in assignments:
-        slides = list(assignment.version.slides.all())
-        acknowledged_ids = {item.slide_id for item in assignment.slide_progress.all()}
+        slides = units(assignment.version)
+        acknowledged_ids = content_acknowledged_ids(assignment)
         status = assignment_status(assignment, now=now)
         row = {
             "assignment": assignment,
@@ -244,8 +245,8 @@ def assignment_detail(request, assignment_id):
     if not access.can_review:
         raise Http404("Assignment not found.")
     assignment = access.assignment
-    slides = list(assignment.version.slides.all())
-    acknowledged_ids = set(assignment.slide_progress.values_list("slide_id", flat=True))
+    slides = units(assignment.version)
+    acknowledged_ids = content_acknowledged_ids(assignment)
     rows = [{"slide": slide, "acknowledged": slide.id in acknowledged_ids} for slide in slides]
     quiz = Quiz.objects.filter(version=assignment.version).first()
     attempts = [{"attempt": attempt, "score": displayed_score(attempt)}
@@ -280,9 +281,9 @@ def assignment_slide(request, assignment_id, slide_id):
             assignment, slide = visit_slide(assignment_id=assignment.id, slide_id=slide.id, employee=request.employee)
         except AssignmentAccessError as exc:
             return HttpResponseForbidden(str(exc))
-    slides = list(assignment.version.slides.all())
+    slides = units(assignment.version)
     index = next(index for index, item in enumerate(slides) if item.id == slide.id)
-    acknowledged_ids = set(assignment.slide_progress.values_list("slide_id", flat=True))
+    acknowledged_ids = content_acknowledged_ids(assignment)
     acknowledged = slide.id in acknowledged_ids
     return render(request, "training/assignment_slide.html", {
         "assignment": assignment, "slide": slide, "acknowledged": acknowledged,
@@ -308,9 +309,9 @@ def acknowledge(request, assignment_id, slide_id):
     except AssignmentAccessError as exc:
         return HttpResponseForbidden(str(exc))
     if not assignment.completed_at:
-        acknowledged_ids = set(assignment.slide_progress.values_list("slide_id", flat=True))
+        acknowledged_ids = content_acknowledged_ids(assignment)
         next_action = _learner_next_action(
-            assignment, list(assignment.version.slides.all()), acknowledged_ids,
+            assignment, units(assignment.version), acknowledged_ids,
             Quiz.objects.filter(version=assignment.version).exists(),
         )
         if next_action["label"] == "Resume":

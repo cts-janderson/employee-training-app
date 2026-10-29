@@ -75,8 +75,11 @@ def export_assignments(request):
 
 
 def _detail_context(assignment):
-    slides = list(assignment.version.slides.all())
-    progress = {entry.slide_id: entry for entry in assignment.slide_progress.all()}
+    from .learning_content import units
+    slides = units(assignment.version)
+    progress = ({entry.document_id: entry for entry in assignment.document_progress.all()}
+                if assignment.version.content_format == "documents" else
+                {entry.slide_id: entry for entry in assignment.slide_progress.all()})
     quiz = Quiz.objects.filter(version=assignment.version).first()
     attempts = [
         {"attempt": attempt, "score": displayed_score(attempt),
@@ -111,7 +114,7 @@ def _render_detail(request, assignment_id, *, error=None, status=200):
     )
     return render(request, "training/assignment_admin_detail.html", {
         **_detail_context(assignment), "error": error,
-        "back_url": safe_return_to(request, "assignment_dashboard"),
+        "back_url": safe_return_to(request, "assignment_dashboard", report_details=True),
     }, status=status)
 
 

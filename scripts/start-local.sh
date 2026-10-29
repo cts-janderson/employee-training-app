@@ -15,4 +15,7 @@ export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 
 .venv/bin/python manage.py migrate
 .venv/bin/python manage.py bootstrap_demo_admin
-exec .venv/bin/python manage.py runserver 127.0.0.1:8000
+.venv/bin/python manage.py cleanup_training_imports --loop &
+import_cleanup_pid=$!
+trap 'kill "$import_cleanup_pid" 2>/dev/null || true' EXIT
+.venv/bin/python manage.py runserver 127.0.0.1:8000

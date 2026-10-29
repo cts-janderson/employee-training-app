@@ -1,0 +1,8 @@
+{% extends 'training/base.html' %}
+{% block title %}Preview documents · Employee Training{% endblock %}
+{% block content %}
+<p><a href="{% url 'training_list' %}">← Training library</a>{% if version.status == 'draft' %} / <a href="{% url 'draft_editor' version.training_id %}">Edit draft</a>{% endif %}</p>
+<h1>{{ version.title|default:'Untitled training' }}</h1><p>Version {{ version.version_number }} · {{ version.get_status_display }} · Preview only</p>
+{% for document in documents %}<article class="card document-reading"><p class="muted">{{ document.path }}</p><h2>{{ document.title }}</h2>{{ document.rendered_body }}</article>{% empty %}<p>No documents yet.</p>{% endfor %}
+{% if quiz %}<p><a href="{% url 'quiz_learner_preview' quiz.id %}">Preview saved quiz as learner</a></p>{% endif %}
+{% endblock %}

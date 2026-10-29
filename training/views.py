@@ -1,8 +1,11 @@
 import uuid
+from urllib.parse import urlencode
 
 from django.http import Http404, HttpResponseBadRequest, JsonResponse
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from .authoring_ui import draft_errors, record_save, saved_slide_rows, submitted_slide_rows
@@ -43,13 +46,21 @@ def training_list(request):
     status_filter = request.GET.get("status", "")
     if status_filter not in {"draft", "published"}:
         status_filter = ""
-    trainings = Training.objects.with_display_title().prefetch_related("versions").order_by(
-        Lower("display_title"), "id",
-    )
+    sort = request.GET.get("sort", "title")
+    if sort not in {"title", "-title"}:
+        sort = "title"
+    version_query = TrainingVersion.objects.annotate(
+        slide_count=Count("slides", distinct=True),
+        document_count=Count("outline_items", filter=Q(outline_items__kind="document"), distinct=True),
+        has_quiz=Exists(Quiz.objects.filter(version_id=OuterRef("pk"))),
+    ).order_by("version_number")
+    trainings = Training.objects.with_display_title().prefetch_related(
+        Prefetch("versions", queryset=version_query),
+    ).order_by(Lower("display_title").desc() if sort == "-title" else Lower("display_title"), "id")
     if status_filter:
         trainings = trainings.filter(versions__status=status_filter).distinct()
     listing = browse(request, trainings, search_fields=("versions__title",),
-                     extra_params={"status": status_filter} if status_filter else None)
+                     extra_params={"status": status_filter, "sort": sort})
     rows = []
     for training in listing.page.object_list:
         versions = list(training.versions.all())
@@ -67,15 +78,24 @@ def training_list(request):
             "draft_title": (draft.title if draft and latest and draft.title != latest.title else ""),
         })
     return render(request, "training/list.html", {
-        "rows": rows, "browse": listing, "status_filter": status_filter,
+        "rows": rows, "browse": listing, "status_filter": status_filter, "sort": sort,
     })
 
 
 @require_POST
 @demo_admin_required
 def new_training(request):
-    training = create_training()
+    try:
+        training = create_training(content_format=request.POST.get("content_format", "slides"))
+    except DraftInputError as exc:
+        return HttpResponseBadRequest(str(exc))
     return redirect("draft_editor", training_id=training.id)
+
+
+@require_GET
+@demo_admin_required
+def create_content(request):
+    return render(request, "training/create_content.html")
 
 
 @require_POST
@@ -83,16 +103,21 @@ def new_training(request):
 def new_revision(request, training_id):
     get_object_or_404(Training, pk=training_id)
     try:
-        create_revision(training_id)
+        create_revision(training_id, content_format=request.POST.get("content_format") or None)
     except (DraftConflict, DraftInputError) as error:
         return HttpResponseBadRequest(str(error))
-    return redirect("draft_editor", training_id=training_id)
+    return redirect(reverse("draft_editor", args=[training_id]) + "?" + urlencode({
+        "return_to": safe_return_to(request, "training_list"),
+    }))
 
 
 @require_http_methods(["GET", "POST"])
 @demo_admin_required
 def draft_editor(request, training_id):
     version = editable_version(training_id, for_post=request.method == "POST")
+    if version.content_format == "documents":
+        from .document_views import document_editor
+        return document_editor(request, version)
     if request.method == "GET":
         return render(request, "training/editor.html", {
             "version": version, "slides": saved_slide_rows(version),
@@ -163,7 +188,11 @@ def draft_editor(request, training_id):
 def _publication_review_page(request, version, *, conflict=False, blocked=None, status=200):
     from django.urls import reverse
 
-    slides = list(version.slides.all())
+    if version.content_format == "documents":
+        from .documents import documents
+        slides = documents(version)
+    else:
+        slides = list(version.slides.all())
     quiz = Quiz.objects.filter(version=version).prefetch_related("questions__options").first()
     questions = list(quiz.questions.all()) if quiz else []
     problems = blocked if blocked is not None else publication_problems(version)
@@ -174,6 +203,8 @@ def _publication_review_page(request, version, *, conflict=False, blocked=None, 
         label = ("Supporting material" if "#supporting-material" in item["href"] else
                  item["message"].split(":", 1)[0] if ":" in item["message"] else "Training")
         href = item["href"]
+        if (getattr(item["message"], "target", None) or (None,))[0] == "document":
+            href = editor_url + "?item=" + item["message"].target[1]
         if href.startswith("#"):
             href = editor_url + href
         if not groups or groups[-1]["label"] != label:
@@ -239,6 +270,9 @@ def _draft_conflict(request, version, submitted, title, description):
 def preview(request, training_id, version_id):
     version = get_object_or_404(TrainingVersion, pk=version_id, training_id=training_id)
     quiz = Quiz.objects.filter(version=version).prefetch_related("questions__options").first()
+    if version.content_format == "documents":
+        from .documents import documents
+        return render(request, "training/document_preview.html", {"version": version, "documents": documents(version), "quiz": quiz})
     return render(request, "training/preview.html", {"version": version, "slides": version.slides.all(), "quiz": quiz})
 
 
@@ -253,6 +287,15 @@ def save_materials_view(request, training_id):
                                rows=rows, action=request.POST.get("action", "save"))
     except (KeyError, ValueError, DraftInputError, DraftConflict) as exc:
         version.refresh_from_db()
+        if version.content_format == "documents":
+            from .document_views import document_editor
+            submitted_materials = [
+                {"id": item_id, "name": name, "url": url, "description": description}
+                for item_id, name, url, description in zip(request.POST.getlist("material_id"),
+                    request.POST.getlist("material_name"), request.POST.getlist("material_url"),
+                    request.POST.getlist("material_description"))]
+            return document_editor(request, version, material_error=str(exc), material_rows=submitted_materials,
+                material_status=409 if isinstance(exc, DraftConflict) else 400)
         return render(request, "training/editor.html", {
             "version": version, "slides": saved_slide_rows(version),
             "form_title": version.title, "form_description": version.description,

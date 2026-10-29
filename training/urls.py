@@ -1,12 +1,23 @@
 from django.urls import path
 
 from . import assignment_admin_views, assignment_views, employee_views, group_views, library_quiz_views, notification_views, quiz_learner_views, quiz_views, views
+from . import report_views, import_views, document_views
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("health/", views.health, name="health"),
     path("trainings/", views.training_list, name="training_list"),
     path("trainings/new/", views.new_training, name="new_training"),
+    path("trainings/create/", views.create_content, name="create_content"),
+    path("trainings/import/", import_views.select_files, name="import_trainings"),
+    path("trainings/import/<uuid:batch_id>/", import_views.review_import, name="review_import"),
+    path("reports/", report_views.reports, name="reports"),
+    path("reports/export.csv", report_views.reports_export, name="reports_export"),
+    path("reports/trainings/<uuid:training_id>/", report_views.training_report, name="training_report"),
+    path("reports/trainings/<uuid:training_id>/export.csv", report_views.training_report_export, name="training_report_export"),
+    path("reports/employees/<uuid:employee_id>/", report_views.employee_report, name="employee_report"),
+    path("reports/employees/<uuid:employee_id>/export.csv", report_views.employee_report_export, name="employee_report_export"),
+    path("trainings/<uuid:training_id>/draft/convert-documents/", document_views.convert_documents, name="convert_documents"),
     path("trainings/<uuid:training_id>/draft/", views.draft_editor, name="draft_editor"),
     path("trainings/<uuid:training_id>/draft/materials/", views.save_materials_view, name="save_materials"),
     path("trainings/<uuid:training_id>/draft/review/", views.publication_review, name="publication_review"),
@@ -43,6 +54,8 @@ urlpatterns = [
     path("notifications/<uuid:notification_id>/reconcile/", notification_views.reconcile_notification_view, name="reconcile_notification"),
     path("my-training/", assignment_views.my_training, name="my_training"),
     path("my-training/<uuid:assignment_id>/", assignment_views.assignment_detail, name="assignment_detail"),
+    path("my-training/<uuid:assignment_id>/documents/<uuid:document_id>/", document_views.assignment_document, name="assignment_document"),
+    path("my-training/<uuid:assignment_id>/documents/<uuid:document_id>/acknowledge/", document_views.acknowledge_document, name="acknowledge_document"),
     path("my-training/<uuid:assignment_id>/slides/<uuid:slide_id>/", assignment_views.assignment_slide, name="assignment_slide"),
     path("my-training/<uuid:assignment_id>/slides/<uuid:slide_id>/acknowledge/", assignment_views.acknowledge, name="acknowledge"),
     path("my-training/<uuid:assignment_id>/quiz/", quiz_learner_views.take_quiz, name="take_quiz"),

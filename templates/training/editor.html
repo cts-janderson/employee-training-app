@@ -1,6 +1,8 @@
 {% extends "training/base.html" %}
 {% block title %}Edit draft · Employee Training{% endblock %}
 {% block content %}
+<section class="card"><h2>Document authoring</h2><p>Convert this saved draft into editable documents. Each slide becomes one document; text and footers are preserved. Published versions and existing assignments keep their original slides. Save your changes first.</p><form method="post" action="{% url 'convert_documents' version.training_id %}">{% csrf_token %}<input type="hidden" name="revision" value="{{ version.revision }}"><button name="confirm" value="convert" class="secondary">Convert saved draft to documents</button></form></section>
+
   <p><a href="{{ back_url|default:'/trainings/' }}">← Trainings</a></p>
   <h1>Draft version {{ version.version_number }}</h1>
   <form class="card" method="post" action="{% url 'change_renewal_interval' version.training_id %}">{% csrf_token %}
@@ -12,11 +14,11 @@
   {% if conflict %}
     <section class="error" role="alert" aria-labelledby="conflict-heading">
       <h2 id="conflict-heading">{% if published_conflict %}This version was published{% else %}A newer draft was saved{% endif %}</h2>
-      <p>Your submitted changes were not saved. The server is at revision {{ version.revision }}. Compare the saved content below with your submitted fields.</p>
-      {% if not published_conflict %}<p>Applying your changes will replace the saved draft content. Another save made after this page loaded will be rejected.</p>{% endif %}
+      <p>Your submitted changes were not saved. Compare the latest saved copy below with your changes.</p>
+      {% if not published_conflict %}<p>Saving your changes will replace the latest saved copy shown below.</p>{% endif %}
     </section>
     <details class="card" open>
-      <summary><strong>Current saved revision {{ version.revision }}</strong></summary>
+      <summary><strong>Latest saved copy</strong></summary>
       <p><strong>Title:</strong> {{ version.title|default:"(empty)" }}</p>
       <p class="plain-text"><strong>Description:</strong> {{ version.description|default:"(empty)" }}</p>
       <ol>{% for slide in server_slides %}
@@ -24,7 +26,7 @@
       {% empty %}<li>No saved slides.</li>{% endfor %}</ol>
     </details>
   {% endif %}
-  <p id="save-state" role="status">{% if saved_notice %}{{ saved_notice }}{% elif request.method == "POST" %}Unsaved changes are shown below.{% else %}Showing saved revision {{ version.revision }}.{% endif %}</p>
+  <p id="save-state" role="status">{% if saved_notice %}{{ saved_notice }}{% elif request.method == "POST" %}Unsaved changes are shown below.{% else %}All changes saved.{% endif %}</p>
   {% if not conflict %}
     <p><a class="button secondary" href="{% url 'quiz_editor' version.training_id %}">Edit optional quiz</a> <a href="{% url 'attach_library_quiz' version.training_id %}">Attach from quiz library</a> <span class="muted">Save this page before opening a quiz page.</span></p>
   {% endif %}
@@ -98,7 +100,7 @@
         {% if published_conflict %}
           <a href="{% url 'preview' version.training_id version.id %}">Review published version</a>
         {% else %}
-          <button type="submit" name="action" value="save">Apply my changes to revision {{ version.revision }}</button>
+          <button type="submit" name="action" value="save">Replace the saved draft with my changes</button>
           <a href="{% url 'draft_editor' version.training_id %}">Discard my changes and reload saved draft</a>
         {% endif %}
       {% else %}
@@ -110,23 +112,7 @@
     </div>
     {% if not conflict %}<p class="muted">Save changes on this page and in the quiz editor before opening publication review. Review shows only saved content.</p>{% endif %}
   </form>
-  {% if version.status == "draft" %}<section id="supporting-material" class="card stack">
-    <h2>Supporting material</h2><p>Optional reference links are saved with this version. Use https:// links.</p>
-    {% if material_error %}<p class="error" role="alert">{{ material_error }}</p>{% endif %}
-    <form method="post" action="{% url 'save_materials' version.training_id %}">{% csrf_token %}
-      <input type="hidden" name="revision" value="{{ version.revision }}">
-      {% for material in material_rows|default:version.materials.all %}
-        <div class="card stack"><h3>Material {{ forloop.counter }}</h3>
-          <input type="hidden" name="material_id" value="{{ material.id }}">
-          <label for="material-name-{{ material.id }}">Name</label><input id="material-name-{{ material.id }}" name="material_name" value="{{ material.name }}" maxlength="200">
-          <label for="material-url-{{ material.id }}">https:// link</label><input id="material-url-{{ material.id }}" name="material_url" value="{{ material.url }}" maxlength="2000">
-          <label for="material-description-{{ material.id }}">Description (optional)</label><input id="material-description-{{ material.id }}" name="material_description" value="{{ material.description }}" maxlength="500">
-          <div class="actions"><button class="secondary" name="action" value="up:{{ material.id }}" {% if forloop.first %}disabled{% endif %}>Move up</button><button class="secondary" name="action" value="down:{{ material.id }}" {% if forloop.last %}disabled{% endif %}>Move down</button><button class="danger" name="action" value="remove:{{ material.id }}">Remove</button></div>
-        </div>
-      {% empty %}<p>No supporting material yet.</p>{% endfor %}
-      <div class="actions"><button class="secondary" name="action" value="add">Add material</button><button name="action" value="save">Save material</button></div>
-    </form>
-  </section>{% endif %}
+  {% include "training/_supporting_material_editor.html" %}
   {% include "training/unsaved_warning.html" %}
   {% if errors %}<script>document.getElementById("draft-errors").focus();</script>{% endif %}
   {% if pending_remove %}<script>document.getElementById("remove-review").focus();</script>{% endif %}
