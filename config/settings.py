@@ -66,9 +66,20 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {"staticfiles": {"BACKEND": "config.storage.VersionedStaticFilesStorage"}}
 
-# The notification worker uses a local-only sink until the mail integration is approved.
-EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+# Production mail goes through Microsoft Graph (ADR-0011); local development keeps the in-memory sink.
+GRAPH_EMAIL_BACKEND = "training.mail.GraphEmailBackend"
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.locmem.EmailBackend" if DEBUG
+                          else GRAPH_EMAIL_BACKEND)
 DEFAULT_FROM_EMAIL = os.getenv("NOTIFICATION_FROM_EMAIL", "training@example.test")
+GRAPH_TENANT_ID = os.getenv("GRAPH_TENANT_ID", "")
+GRAPH_CLIENT_ID = os.getenv("GRAPH_CLIENT_ID", "")
+GRAPH_CLIENT_SECRET = os.getenv("GRAPH_CLIENT_SECRET", "")
+MAIL_TIMEOUT_SECONDS = int(os.getenv("MAIL_TIMEOUT_SECONDS", "15"))
+if not DEBUG and EMAIL_BACKEND != GRAPH_EMAIL_BACKEND:
+    # Any other backend would quietly drop account emails and notifications in production.
+    raise ImproperlyConfigured("EMAIL_BACKEND must be the Graph backend when DJANGO_DEBUG is off")
+if EMAIL_BACKEND == GRAPH_EMAIL_BACKEND and not all([GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET]):
+    raise ImproperlyConfigured("GRAPH_TENANT_ID, GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET are required to send email")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 if not DEBUG and not APP_BASE_URL.startswith("https://"):
     raise ImproperlyConfigured("APP_BASE_URL must use https when DJANGO_DEBUG is off")

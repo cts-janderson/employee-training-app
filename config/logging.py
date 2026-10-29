@@ -15,6 +15,8 @@ class RedactAccountLinks(logging.Filter):
             record.exc_text = logging.Formatter().formatException(record.exc_info)
         if record.exc_text:
             record.exc_text = redact_account_links(record.exc_text)
+        if record.stack_info:
+            record.stack_info = redact_account_links(record.stack_info)
         message = record.getMessage()
         redacted = redact_account_links(message)
         if redacted != message:

@@ -35,6 +35,8 @@ class Employee(AbstractBaseUser):
     link_generation = models.PositiveIntegerField(default=0)
     # Bumped on deactivation, so sessions from before it stay dead after reactivation.
     session_version = models.PositiveIntegerField(default=0)
+    # Set when the last verification, setup or reset email couldn't be sent; cleared by the next success.
+    link_send_failed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Email uniqueness is the case-insensitive constraint below; see ADR-0009.
@@ -795,3 +797,9 @@ class AssignmentDocumentProgress(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Document acknowledgment evidence cannot be deleted.")
+
+
+class WorkerHeartbeat(models.Model):
+    """When each background worker last finished a cycle, so operators can tell a stalled worker."""
+    name = models.CharField(max_length=50, primary_key=True)
+    beat_at = models.DateTimeField()

@@ -1,3 +1,4 @@
+import logging
 import uuid
 import re
 from dataclasses import dataclass
@@ -11,10 +12,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .employees import is_administrator
+from .mail import AmbiguousMailError, GraphMailSender, PermanentMailError, TransientMailError
 from .models import (
     Assignment, EmployeeActivityChange, Notification, NotificationDeliveryAttempt,
     NotificationReconciliation,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationError(Exception):
@@ -32,8 +37,9 @@ class ManualNudgeRateLimited(NotificationError):
 
 
 class TransientDeliveryError(NotificationError):
-    def __init__(self, code="temporary_failure"):
+    def __init__(self, code="temporary_failure", retry_after=None):
         self.code = code
+        self.retry_after = retry_after
 
 
 class PermanentDeliveryError(NotificationError):
@@ -55,6 +61,30 @@ class LocalEmailSink:
         EmailMessage(subject=subject, body=body, from_email=settings.DEFAULT_FROM_EMAIL,
                      to=[recipient], headers={"X-Training-Delivery-Key": str(delivery_key)}).send()
         return f"local-sink:{delivery_key}"
+
+
+class GraphNotificationSender:
+    """Translate Graph outcomes into the delivery errors the retry and reconciliation flow expects."""
+
+    def __init__(self, mail_sender=None):
+        self.mail_sender = mail_sender or GraphMailSender()
+
+    def send(self, *, delivery_key, recipient, subject, body):
+        if recipient.strip().lower().endswith(".test"):
+            raise PermanentDeliveryError("reserved_test_address")
+        try:
+            return self.mail_sender.send(recipient=recipient, subject=subject, body=body, delivery_key=delivery_key)
+        except TransientMailError as exc:
+            raise TransientDeliveryError(exc.code, exc.retry_after) from exc
+        except PermanentMailError as exc:
+            raise PermanentDeliveryError(exc.code) from exc
+        except AmbiguousMailError as exc:
+            raise AmbiguousDeliveryError(exc.code) from exc
+
+
+def notification_sender():
+    """The sender for the configured email backend: Graph in production, the local sink otherwise."""
+    return GraphNotificationSender() if settings.EMAIL_BACKEND == settings.GRAPH_EMAIL_BACKEND else LocalEmailSink()
 
 
 def _safe_error_code(value):
@@ -364,7 +394,9 @@ def delivery_result(notification, error, *, now):
             changes["status"] = Notification.Status.EXHAUSTED
         else:
             changes["status"] = Notification.Status.RETRY
-            changes["next_attempt_at"] = now + timedelta(seconds=min(3600, 60 * 2 ** (failures - 1)))
+            # Our own backoff is capped at an hour; a longer wait the provider asks for is honored, up to a day.
+            delay = max(min(3600, 60 * 2 ** (failures - 1)), min(86400, getattr(error, "retry_after", None) or 0))
+            changes["next_attempt_at"] = now + timedelta(seconds=delay)
         return Outcome.TRANSIENT_FAILURE, code, changes
     if isinstance(error, PermanentDeliveryError):
         code = _safe_error_code(error.code)
@@ -375,8 +407,11 @@ def delivery_result(notification, error, *, now):
 
 # Lock an assignment before any of its notifications.
 def dispatch_claimed(notification_id, claim_token, *, now=None, sender=None):
+    # Without a fixed clock, outcomes are timed from when the send finished, so a provider's
+    # Retry-After isn't shortened by however long the request took.
+    fixed_clock = now is not None
     now = now or timezone.now()
-    sender = sender or LocalEmailSink()
+    sender = sender or notification_sender()
     with transaction.atomic():
         assignment_id = Notification.objects.values_list("assignment_id", flat=True).get(pk=notification_id)
         assignment = Assignment.objects.select_for_update().select_related("employee", "version").get(
@@ -404,25 +439,39 @@ def dispatch_claimed(notification_id, claim_token, *, now=None, sender=None):
                 delivery_key=notification.id, recipient=recipient, subject=subject, body=body,
             )
         except Exception as exc:
-            attempt.outcome, attempt.error_code, changes = delivery_result(notification, exc, now=now)
+            finished = now if fixed_clock else timezone.now()
+            attempt.outcome, attempt.error_code, changes = delivery_result(notification, exc, now=finished)
         else:
-            attempt.outcome, attempt.error_code, changes = delivery_result(notification, None, now=now)
+            finished = now if fixed_clock else timezone.now()
+            attempt.outcome, attempt.error_code, changes = delivery_result(notification, None, now=finished)
             attempt.provider_reference = str(reference)[:200]
             changes["provider_reference"] = attempt.provider_reference
-        attempt.finished_at = now
+        attempt.finished_at = finished
         attempt.save(update_fields=["finished_at", "outcome", "provider_reference", "error_code"])
-        return _save_transition(notification, now, {"attempt_count": number, **changes, **_RELEASED_CLAIM})
+        return _save_transition(notification, finished, {"attempt_count": number, **changes, **_RELEASED_CLAIM})
 
 
-def process_ready_notifications(*, limit=100, now=None, sender=None):
-    now = now or timezone.now()
-    recover_stale_claims(now=now)
+def process_ready_notifications(*, limit=100, now=None, sender=None, should_stop=None):
+    """Dispatch up to ``limit`` due notifications, checking ``should_stop`` before each new claim.
+
+    Without a fixed ``now``, each claim takes the current time, so a long cycle of slow sends doesn't stamp
+    late claims with a start time that already looks stale to another worker."""
+    sender = sender or notification_sender()
+    recover_stale_claims(now=now or timezone.now())
     processed = []
     for _ in range(limit):
-        claim = claim_next_notification(now=now)
+        if should_stop and should_stop():
+            break
+        current = now or timezone.now()
+        claim = claim_next_notification(now=current)
         if claim is None:
             break
-        processed.append(dispatch_claimed(*claim, now=now, sender=sender))
+        try:
+            processed.append(dispatch_claimed(*claim, now=now, sender=sender))
+        except NotificationError:
+            # Another worker recovered this claim; it's already recorded for reconciliation.
+            logger.warning("Notification %s was recovered by another worker before dispatch finished", claim[0])
+            continue
     return processed
 
 

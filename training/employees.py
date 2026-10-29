@@ -19,6 +19,10 @@ def employee_status(employee):
     """The directory label, badge tone and explanation for an employee."""
     if not employee.is_active:
         return "Inactive", "gray", ""
+    if not employee.is_demo and employee.link_send_failed_at:
+        return ("Email not sent", "amber",
+                "The last account email couldn't be sent. Resend an invitation from Accounts; anyone else can "
+                "request a new link when signing in or resetting their password.")
     if employee.is_demo:
         if not employee.email_is_verified:
             return "Email unverified", "amber", "Email updates are unavailable for this address."
