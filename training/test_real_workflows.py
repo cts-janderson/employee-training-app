@@ -1,8 +1,11 @@
 import threading
 import uuid
+from unittest import mock
 from datetime import timedelta
 
+from django.contrib.auth.forms import PasswordChangeForm
 from django.core import mail
+from django.core.cache import cache
 from django.db import close_old_connections, connection, connections
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -167,6 +170,33 @@ class RealEmployeeWorkflowTests(TestCase):
         with override_settings(SECRET_KEY="rotated-" + "x" * 50,
                                SECRET_KEY_FALLBACKS=["development-only-change-before-deployment"]):
             self.assertEqual(self.client.get(reverse("my_training")).status_code, 200)
+
+    def test_password_change_keeps_a_concurrent_email_change_and_deactivation(self):
+        self.sign_in("worker@example.com")
+        original_clean = PasswordChangeForm.clean_old_password
+
+        def change_meanwhile(form):
+            update_employee(employee_id=self.worker.id, name="Worker", email="worker2@example.com", active=False,
+                            actor=self.admin)
+            return original_clean(form)
+
+        with mock.patch.object(PasswordChangeForm, "clean_old_password", change_meanwhile):
+            response = self.client.post(reverse("password_change"), {
+                "old_password": PASSWORD, "new_password1": "a different long phrase",
+                "new_password2": "a different long phrase"})
+        self.worker.refresh_from_db()
+        self.assertEqual(self.worker.email, "worker2@example.com")
+        self.assertFalse(self.worker.is_active)
+        self.assertTrue(self.worker.check_password(PASSWORD))
+        self.assertTrue(response["Location"].startswith(reverse("sign_in")))
+
+    def test_unicode_email_variants_share_one_sign_in_limit(self):
+        cache.clear()
+        for variant in ["worker@example.com", "ＷＯＲＫＥＲ@example.com", "ｗorker@example.com",
+                        "worker@ｅxample.com", "Worker@Example.com"]:
+            self.client.post(reverse("sign_in"), {"username": variant, "password": "wrong"})
+        response = self.client.post(reverse("sign_in"), {"username": "ｗｏｒｋｅｒ@example.com", "password": PASSWORD})
+        self.assertEqual(response.status_code, 429)
 
     def test_last_administrator_who_can_sign_in_is_protected(self):
         helper = Employee.objects.create(name="Helper", email="helper@example.com", verified_email="helper@example.com",

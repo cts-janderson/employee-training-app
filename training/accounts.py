@@ -1,5 +1,6 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
 import logging
+import unicodedata
 
 from django.conf import settings
 from django.contrib.auth.backends import BaseBackend
@@ -56,7 +57,8 @@ def is_account_administrator(employee):
 
 
 def normalize_email(email):
-    return (email or "").strip().lower()
+    # NFKC matches Django's sign-in form, so rate-limit keys and lookups agree on one identity.
+    return unicodedata.normalize("NFKC", email or "").strip().lower()
 
 
 class EmployeeBackend(BaseBackend):

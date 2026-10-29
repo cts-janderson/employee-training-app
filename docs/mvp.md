@@ -4,7 +4,7 @@
 **Status:** Confirmed MVP requirements baseline  
 **Date:** October 26, 2026  
 
-> **Authentication update, October 28, 2026:** The [email and password authentication plan](plans/email-password-authentication.md) supersedes the provider-managed sign-in, provider account-binding, and no-self-registration requirements below. The new direction allows employee registration subject to administrator approval and administrator-created employee records. Implementation is deferred.
+> **Authentication update, October 28, 2026:** The [email and password authentication plan](plans/email-password-authentication.md) supersedes the provider-managed sign-in, provider account-binding, and no-self-registration requirements below. The new direction allows employee registration subject to administrator approval and administrator-created employee records. It is implemented locally ([Slice 29](plans/29-sign-in-skeleton.md) and [Slice 31](plans/31-real-employee-workflows.md)); email delivery and [production deployment](plans/30-production-deployment.md) remain.
 
 ## 1. Executive Summary
 
@@ -20,7 +20,7 @@ The central architectural principle is to separate training definitions, trainin
 
 The MVP serves one organization. Administrators have organization-wide access and can also receive training through their individual employee identities.
 
-Administrators create employee records before sign-in. Authentication is provider-managed, with a one-time operator procedure for the first administrator and no public self-registration. Employee identity persists through name/email changes, which are recorded in profile history; ordinary reports show current names.
+Administrators create employee records before sign-in. Employees sign in with an email address and password. An operator command creates the first administrator, and employees may also register themselves, subject to administrator approval. Employee identity persists through name/email changes, which are recorded in profile history; ordinary reports show current names.
 
 Initial sign-in linking requires a provider-verified email matching an active, unlinked employee record. Subsequent sign-in uses the provider's stable account identity; changing email never transfers that binding to a different person.
 

@@ -46,7 +46,7 @@ Sign-in, registration, approval, invitations and password reset work locally wit
    .venv/bin/python manage.py create_administrator --name "Local Admin" --email admin@example.com
    ```
 
-2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`). The other administrator pages still work only with demo data, so use **Switch profile** after signing out to reach them.
+2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`) and use the other administrator pages with real employees. Real and demo administrators don't see each other's employees, trainings, library quizzes or groups; see [Slice 31](plans/31-real-employee-workflows.md). Apply migration `0017` first. To work with demo data, sign out and use **Switch profile**.
 3. Register a second address at `/account/register/`, open the printed verify link, then approve the application from **Accounts**.
 
 Real accounts can't use the demo switcher, and demo profiles can't sign in with a password.

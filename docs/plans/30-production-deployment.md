@@ -131,6 +131,16 @@ Outcome: one Docker Compose stack that runs on any Linux host with outbound HTTP
 - The owner names the operational owner and approves the data policy, then provisions the host and DNS name, the Entra app registration with admin consent, the access policy, and the off-host backup target.
 - Run a smoke deployment with synthetic data on the target host before inviting any real employee.
 
+### Review findings to fold in
+
+The October 29, 2026 security review of the Slice 29 and 31 commits found no critical or high issues. These low findings belong with the steps above:
+
+- **Step D:** add a per-IP counter and a per-email counter to sign-in, so one password can't be tried across many emails or addresses without a cap.
+- **Step C:** send account emails off the request path, so the reset response time doesn't reveal whether an email is registered.
+- **Step C:** give each link purpose its own counter, so a reset request doesn't cancel an outstanding verification or setup link.
+- **Step A follow-up:** let administrators reject or remove an unverified applicant, or expire one automatically. Today an unverified registration blocks an invitation to the same address.
+- **Step B:** set `SECURE_REFERRER_POLICY = "same-origin"` explicitly, and escape nothing in the plain-text account emails (`{% autoescape off %}`).
+
 ## Order
 
 The steps run in order, each as its own PR: A → B → C → D → E → F → G. A synthetic-data smoke deployment can follow E even before A merges, as long as no real employees are invited.

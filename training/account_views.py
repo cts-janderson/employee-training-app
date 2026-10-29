@@ -1,5 +1,7 @@
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import logout, update_session_auth_hash, views as auth_views
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
+from django.http import HttpResponseRedirect
 from django.contrib.auth.views import INTERNAL_RESET_SESSION_TOKEN
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -200,6 +202,20 @@ class AccountSetup(_AccountLinkView):
 class PasswordChange(auth_views.PasswordChangeView):
     template_name = "training/password_change.html"
     success_url = reverse_lazy("password_change_done")
+
+    def form_valid(self, form):
+        # Django's form saves the whole row loaded at the start of the request, which could restore a
+        # deactivation or email change made meanwhile. Lock, recheck, and save only the password.
+        loaded = self.request.user
+        with transaction.atomic():
+            employee = Employee.objects.select_for_update().get(pk=loaded.pk)
+            if not employee.is_active or employee.session_version != loaded.session_version:
+                logout(self.request)
+                return redirect_to_login(self.request.get_full_path())
+            employee.set_password(form.cleaned_data["new_password1"])
+            employee.save(update_fields=["password"])
+        update_session_auth_hash(self.request, employee)
+        return HttpResponseRedirect(self.get_success_url())
 
 
 @login_required
