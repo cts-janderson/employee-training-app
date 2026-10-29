@@ -67,7 +67,7 @@ Done; see **Status** below. These parts move to later steps:
   - Remove the guard that allows only debug mode.
   - Handle SIGTERM by finishing the current claim, then exit.
   - Write a heartbeat timestamp to a row or table.
-- **Account emails:** wrap `send()` in `send_account_email`. A failure is logged and recorded on the employee as `last_link_send_failed_at`. It must not return a 500, and the response stays the same. Recovery uses the existing resend actions (verification resend, invitation resend, a new reset request). The **Accounts** page flags employees whose last send failed.
+- **Account emails:** wrap `send()` in `send_account_email`. A failure is logged and recorded on the employee as `link_send_failed_at`. It must not return a 500, and the response stays the same. Recovery uses the existing resend actions (verification resend, invitation resend, a new reset request). The **Accounts** page flags employees whose last send failed.
 - Tests use a fake HTTP transport and cover each status class, timeout after send, token refresh, and `Retry-After`.
 
 ### D. Rate-limit store
@@ -80,7 +80,7 @@ Done; see **Status** below. These parts move to later steps:
 
 - `Dockerfile`:
   - Multi-stage build on `python:3.12-slim`, installing with `pip install .`.
-  - At build time, run `collectstatic` with placeholder settings that aren't secret: `DJANGO_SECRET_KEY=build`, a dummy `DATABASE_URL`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS=build`, `APP_BASE_URL=https://build.invalid` and `EMAIL_BACKEND=django.core.mail.backends.dummy.EmailBackend`, which the startup checks from steps B and C require. Settings must not open a database connection at import.
+  - At build time, run `collectstatic` with placeholder settings that aren't secret: `DJANGO_SECRET_KEY=build`, a dummy `DATABASE_URL`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS=build`, `APP_BASE_URL=https://build.invalid`, and placeholder `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID` and `GRAPH_CLIENT_SECRET` values (`build`), which the startup checks from steps B and C require. `collectstatic` never sends mail. Settings must not open a database connection at import.
   - Non-root user.
 - `docker/entrypoint.sh` dispatches on the role:
   - `migrate`: `migrate --noinput`, then exit.

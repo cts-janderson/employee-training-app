@@ -33,8 +33,16 @@ class Command(BaseCommand):
             # Finish the notification in hand, then exit before claiming another.
             stopping.append(signum)
 
-        signal.signal(signal.SIGTERM, stop)
-        signal.signal(signal.SIGINT, stop)
+        previous = {number: signal.signal(number, stop) for number in (signal.SIGTERM, signal.SIGINT)}
+        try:
+            self._run(options, stopping)
+        finally:
+            for number, handler in previous.items():
+                signal.signal(number, handler)
+        if stopping:
+            self.stdout.write("Notification worker stopped.")
+
+    def _run(self, options, stopping):
         while not stopping:
             processed = process_ready_notifications(limit=options["limit"], should_stop=lambda: bool(stopping))
             WorkerHeartbeat.objects.update_or_create(name="notifications", defaults={"beat_at": timezone.now()})
@@ -44,5 +52,3 @@ class Command(BaseCommand):
             deadline = time.monotonic() + options["interval"]
             while not stopping and time.monotonic() < deadline:
                 time.sleep(min(0.5, options["interval"]))
-        if stopping:
-            self.stdout.write("Notification worker stopped.")

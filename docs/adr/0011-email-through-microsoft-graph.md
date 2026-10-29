@@ -20,9 +20,9 @@ Use option 3. `training/mail.py` gets a token with the client credentials, cache
 The client classifies every outcome:
 
 - **Accepted (`202`):** sent. Graph's request ID is recorded.
-- **Retryable:** the connection failed before the request was written, `429`, or `500`/`502`/`503`. These honor `Retry-After`.
+- **Retryable:** the connection failed before the request was written, `429`, or `503`. These honor `Retry-After` in seconds or as an HTTP date, up to a day.
 - **Permanent:** `400`, `403`, `404`, a refused token, or `401` after one token refresh.
-- **Ambiguous:** a request written with no complete answer, or `504`.
+- **Ambiguous:** a request written with no complete answer, `500`, `502` or `504`. Exchange may have accepted the message before those errors.
 
 Graph's `sendMail` has no idempotency key, so a retry after an ambiguous outcome could send a second email. Ambiguous notifications go to administrator reconciliation instead of retrying.
 
@@ -30,6 +30,6 @@ Graph's `sendMail` has no idempotency key, so a retry after an ambiguous outcome
 
 - The application holds a client secret instead of a mailbox password. The secret expires and must be rotated; the deployment guide covers this.
 - The access policy is required. Without it, `Mail.Send` as an application permission can send as any mailbox in the tenant.
-- Production startup fails without `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID` and `GRAPH_CLIENT_SECRET`, unless another `EMAIL_BACKEND` is set explicitly. The image build sets a dummy backend.
+- With debug off, the email backend must be Graph, and startup fails without `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID` and `GRAPH_CLIENT_SECRET`. The image build passes placeholder values, because `collectstatic` never sends mail.
 - Acceptance by Graph isn't delivery to an inbox. Bounces arrive in the sender mailbox, not in the application.
 - A failed account email doesn't fail the request. The employee is flagged on **Accounts** and the employee list, and the existing resend actions recover it.

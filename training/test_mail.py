@@ -68,6 +68,7 @@ class GraphMailSenderTests(SimpleTestCase):
 
     def test_status_classes(self):
         cases = [((429, {"retry-after": "120"}, b""), TransientMailError), ((503, {}, b""), TransientMailError),
+                 ((500, {}, b""), AmbiguousMailError), ((502, {}, b""), AmbiguousMailError),
                  ((504, {}, b""), AmbiguousMailError), ((400, {}, b""), PermanentMailError),
                  ((403, {}, b""), PermanentMailError), ((404, {}, b""), PermanentMailError)]
         for answer, error in cases:
@@ -83,6 +84,20 @@ class GraphMailSenderTests(SimpleTestCase):
             self.send(FakeGraph(TOKEN, NotSent("ConnectionRefusedError")))
         with self.assertRaises(AmbiguousMailError):
             self.send(FakeGraph(NoAnswer("TimeoutError")))  # token cached from the previous send
+
+    def test_malformed_token_responses_are_retryable(self):
+        for body in (b"not json", b"{}", b'{"access_token": "t", "expires_in": "soon"}', b"[]"):
+            GraphMailSender._token_cache.clear()
+            with self.subTest(body=body), self.assertRaises(TransientMailError) as raised:
+                self.send(FakeGraph((200, {}, body)))
+            self.assertEqual(raised.exception.code, "graph_token_malformed")
+
+    def test_url_segments_are_quoted(self):
+        fake = FakeGraph(TOKEN, ACCEPTED)
+        GraphMailSender(tenant_id="ten/ant?x", client_id="c", client_secret="s", sender="a b@corp.example",
+                        timeout=5, post=fake).send(recipient="sam@corp.example", subject="s", body="b")
+        self.assertIn("/ten%2Fant%3Fx/oauth2", fake.calls[0][0])
+        self.assertIn("/users/a%20b@corp.example/sendMail", fake.calls[1][0])
 
     def test_token_failures_never_count_as_sent(self):
         with self.assertRaises(TransientMailError):
@@ -145,8 +160,33 @@ class GraphNotificationSenderTests(SimpleTestCase):
         now = timezone.now()
         _, _, changes = delivery_result(notification, TransientDeliveryError("graph_429", 1800), now=now)
         self.assertEqual(changes["next_attempt_at"], now + timedelta(seconds=1800))
+        # Our own backoff cap doesn't shorten a longer wait the provider asked for.
+        _, _, changes = delivery_result(notification, TransientDeliveryError("graph_429", 7200), now=now)
+        self.assertEqual(changes["next_attempt_at"], now + timedelta(seconds=7200))
         _, _, changes = delivery_result(notification, TransientDeliveryError("graph_503"), now=now)
         self.assertEqual(changes["next_attempt_at"], now + timedelta(seconds=60))
+
+
+class RetryAfterParsingTests(SimpleTestCase):
+    def test_seconds_and_http_dates(self):
+        from datetime import datetime, timezone as dt_timezone
+        from .mail import _retry_after
+        now = datetime(2026, 10, 29, 12, 0, tzinfo=dt_timezone.utc)
+        self.assertEqual(_retry_after({"retry-after": "120"}, now), 120)
+        self.assertEqual(_retry_after({"retry-after": "Thu, 29 Oct 2026 14:00:00 GMT"}, now), 7200)
+        self.assertEqual(_retry_after({"retry-after": "Thu, 29 Oct 2026 11:00:00 GMT"}, now), 0)
+        self.assertIsNone(_retry_after({"retry-after": "soon"}, now))
+        self.assertIsNone(_retry_after({}, now))
+
+
+class LostClaimTests(TestCase):
+    def test_worker_survives_a_claim_recovered_by_another_worker(self):
+        from .notifications import NotificationError, process_ready_notifications
+        claims = iter([("first", "token"), ("second", "token"), None])
+        with mock.patch("training.notifications.claim_next_notification", lambda now: next(claims)), \
+                mock.patch("training.notifications.dispatch_claimed",
+                           side_effect=[NotificationError("lost"), "sent"]):
+            self.assertEqual(process_ready_notifications(sender=object()), ["sent"])
 
 
 class FailingBackend:
@@ -159,6 +199,24 @@ class FailingBackend:
 
 @override_settings(EMAIL_BACKEND="training.test_mail.FailingBackend")
 class AccountEmailFailureTests(TestCase):
+    def test_failed_send_keeps_the_earlier_link_working(self):
+        from .accounts import setup_tokens
+        employee = Employee.objects.create(name="Ivy", email="ivy@corp.example")
+        earlier = setup_tokens.make_token(employee)
+        with self.assertLogs("training.accounts", "ERROR"), self.captureOnCommitCallbacks(execute=True):
+            send_account_email(employee, "setup")
+        employee.refresh_from_db()
+        self.assertEqual(employee.link_generation, 0)
+        self.assertTrue(setup_tokens.check_token(employee, earlier))
+
+    def test_existing_account_notice_does_not_clear_a_failed_link(self):
+        employee = Employee.objects.create(name="Ivy", email="ivy@corp.example", link_send_failed_at=timezone.now())
+        with override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            with self.captureOnCommitCallbacks(execute=True):
+                send_account_email(employee, "existing")
+        employee.refresh_from_db()
+        self.assertIsNotNone(employee.link_send_failed_at)
+
     def test_failed_account_email_is_flagged_not_raised(self):
         employee = Employee.objects.create(name="Ivy", email="ivy@corp.example")
         with self.assertLogs("training.accounts", "ERROR") as logs, self.captureOnCommitCallbacks(execute=True):

@@ -7,7 +7,9 @@ import http.client
 import json
 import threading
 import time
-from urllib.parse import urlencode, urlsplit
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+from urllib.parse import quote, urlencode, urlsplit
 
 from django.conf import settings
 from django.core.mail.backends.base import BaseEmailBackend
@@ -63,11 +65,20 @@ def https_post(url, *, body, headers, timeout, connection_class=http.client.HTTP
         connection.close()
 
 
-def _retry_after(headers):
-    try:
-        return max(0, int(headers.get("retry-after", "")))
-    except ValueError:
+def _retry_after(headers, now=None):
+    """Seconds to wait from a Retry-After header in either form: delay-seconds or an HTTP date."""
+    value = headers.get("retry-after", "").strip()
+    if not value:
         return None
+    if value.isdigit():
+        return int(value)
+    try:
+        moment = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if moment.tzinfo is None:
+        return None
+    return max(0, int((moment - (now or datetime.now(timezone.utc))).total_seconds()))
 
 
 class GraphMailSender:
@@ -94,7 +105,7 @@ class GraphMailSender:
                 return cached[0]
             try:
                 status, headers, body = self.post(
-                    f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token",
+                    f"https://login.microsoftonline.com/{quote(self.tenant_id, safe='')}/oauth2/v2.0/token",
                     body=urlencode({"client_id": self.client_id, "client_secret": self.client_secret,
                                     "scope": "https://graph.microsoft.com/.default",
                                     "grant_type": "client_credentials"}),
@@ -103,10 +114,15 @@ class GraphMailSender:
                 # No email was sent yet, so a failed token request is always safe to retry.
                 raise TransientMailError("graph_token_unreachable") from None
             if status == 200:
-                payload = json.loads(body)
-                token = payload["access_token"]
+                try:
+                    payload = json.loads(body)
+                    token = payload["access_token"]
+                    lifetime = int(payload.get("expires_in", 0))
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    # Nothing was sent, so an unreadable token response is safe to retry.
+                    raise TransientMailError("graph_token_malformed") from None
                 # Renew a minute early so a token never expires mid-request.
-                self._token_cache[key] = (token, self.clock() + max(0, int(payload.get("expires_in", 0)) - 60))
+                self._token_cache[key] = (token, self.clock() + max(0, lifetime - 60))
                 return token
             if status == 429 or status >= 500:
                 raise TransientMailError("graph_token_unavailable", _retry_after(headers))
@@ -127,7 +143,7 @@ class GraphMailSender:
             token = self._token(refresh=refreshed)
             try:
                 status, headers, _ = self.post(
-                    f"https://graph.microsoft.com/v1.0/users/{self.sender}/sendMail", body=payload,
+                    f"https://graph.microsoft.com/v1.0/users/{quote(self.sender, safe='@')}/sendMail", body=payload,
                     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                     timeout=self.timeout)
             except NotSent:
@@ -139,11 +155,12 @@ class GraphMailSender:
             if status == 401 and not refreshed:
                 refreshed = True
                 continue
-            if status == 429 or status in {500, 502, 503}:
+            if status in {429, 503}:
+                # Throttled or unavailable: the request wasn't processed, so retrying is safe.
                 raise TransientMailError(f"graph_{status}", _retry_after(headers))
-            if status == 504:
-                # A gateway timeout says nothing about whether Exchange accepted the message.
-                raise AmbiguousMailError("graph_504")
+            if status in {500, 502, 504}:
+                # Exchange may have accepted the message before the error, so a retry could send it twice.
+                raise AmbiguousMailError(f"graph_{status}")
             raise PermanentMailError(f"graph_{status}")
 
 

@@ -69,7 +69,7 @@ export DATABASE_URL=postgresql://localhost:5432/employee_training
 DJANGO_DEBUG=1 DEV_AUTH_STUB=1 .venv/bin/python manage.py dispatch_notifications --loop
 ```
 
-Omit `--loop` to process one batch and exit. The worker requires debug mode, the demo stub, and Django's in-memory email backend. Assignment notices, deadline changes, scheduled reminders, and manual nudges are stored as notification records in PostgreSQL before dispatch. The **Notifications** pages show attempts, suppression, blocked addresses, and retries. The in-memory mailbox ends with the worker process; it is not an external delivery service.
+Omit `--loop` to process one batch and exit. Locally the worker requires debug mode, the demo stub, and Django's in-memory email backend; in production it sends through Microsoft Graph ([ADR-0011](adr/0011-email-through-microsoft-graph.md)). Assignment notices, deadline changes, scheduled reminders, and manual nudges are stored as notification records in PostgreSQL before dispatch. The **Notifications** pages show attempts, suppression, blocked addresses, and retries. The in-memory mailbox ends with the worker process; it is not an external delivery service.
 
 Scheduled reminders use 09:00 in `ORG_TIME_ZONE` (default `America/New_York`), three calendar days before and on the due date. The assignment deadline is the start of the following day in that time zone. The worker rechecks eligibility and expiration before dispatch. A manual nudge queues a request; the notification detail shows whether delivery later succeeded.
 

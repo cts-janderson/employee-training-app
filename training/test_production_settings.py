@@ -46,14 +46,18 @@ class ProductionSettingsTests(SimpleTestCase):
     def test_documented_build_placeholders_load(self):
         result = load_settings(DJANGO_SECRET_KEY="build", DJANGO_ALLOWED_HOSTS="build",
                                APP_BASE_URL="https://build.invalid", DATABASE_URL="postgresql://build/unused",
-                               EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend",
-                               GRAPH_TENANT_ID=None, GRAPH_CLIENT_ID=None, GRAPH_CLIENT_SECRET=None)
+                               GRAPH_TENANT_ID="build", GRAPH_CLIENT_ID="build", GRAPH_CLIENT_SECRET="build")
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_production_requires_graph_credentials_to_send_email(self):
         result = load_settings(GRAPH_CLIENT_SECRET=None)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("GRAPH_CLIENT_SECRET are required", result.stderr)
+
+    def test_production_refuses_an_email_backend_that_drops_mail(self):
+        result = load_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("EMAIL_BACKEND must be the Graph backend", result.stderr)
 
     def test_production_requires_explicit_allowed_hosts(self):
         result = load_settings(DJANGO_ALLOWED_HOSTS=None)

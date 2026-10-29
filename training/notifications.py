@@ -66,7 +66,7 @@ class GraphNotificationSender:
         self.mail_sender = mail_sender or GraphMailSender()
 
     def send(self, *, delivery_key, recipient, subject, body):
-        if recipient.endswith(".test"):
+        if recipient.strip().lower().endswith(".test"):
             raise PermanentDeliveryError("reserved_test_address")
         try:
             return self.mail_sender.send(recipient=recipient, subject=subject, body=body, delivery_key=delivery_key)
@@ -390,9 +390,9 @@ def delivery_result(notification, error, *, now):
             changes["status"] = Notification.Status.EXHAUSTED
         else:
             changes["status"] = Notification.Status.RETRY
-            # Back off exponentially, waiting longer when the provider asks for it.
-            delay = max(60 * 2 ** (failures - 1), getattr(error, "retry_after", None) or 0)
-            changes["next_attempt_at"] = now + timedelta(seconds=min(3600, delay))
+            # Our own backoff is capped at an hour; a longer wait the provider asks for is honored, up to a day.
+            delay = max(min(3600, 60 * 2 ** (failures - 1)), min(86400, getattr(error, "retry_after", None) or 0))
+            changes["next_attempt_at"] = now + timedelta(seconds=delay)
         return Outcome.TRANSIENT_FAILURE, code, changes
     if isinstance(error, PermanentDeliveryError):
         code = _safe_error_code(error.code)
@@ -443,18 +443,25 @@ def dispatch_claimed(notification_id, claim_token, *, now=None, sender=None):
 
 
 def process_ready_notifications(*, limit=100, now=None, sender=None, should_stop=None):
-    """Dispatch up to ``limit`` due notifications, checking ``should_stop`` before each new claim."""
-    now = now or timezone.now()
+    """Dispatch up to ``limit`` due notifications, checking ``should_stop`` before each new claim.
+
+    Without a fixed ``now``, each claim takes the current time, so a long cycle of slow sends doesn't stamp
+    late claims with a start time that already looks stale to another worker."""
     sender = sender or notification_sender()
-    recover_stale_claims(now=now)
+    recover_stale_claims(now=now or timezone.now())
     processed = []
     for _ in range(limit):
         if should_stop and should_stop():
             break
-        claim = claim_next_notification(now=now)
+        current = now or timezone.now()
+        claim = claim_next_notification(now=current)
         if claim is None:
             break
-        processed.append(dispatch_claimed(*claim, now=now, sender=sender))
+        try:
+            processed.append(dispatch_claimed(*claim, now=current, sender=sender))
+        except NotificationError:
+            # Another worker recovered this claim; it's already recorded for reconciliation.
+            continue
     return processed
 
 
