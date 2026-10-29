@@ -6,28 +6,31 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 
 from .authoring_ui import quiz_errors, quiz_focus_target, quiz_workspace, record_save, saved_question_rows, submitted_question_rows
 from .browsing import browse, safe_return_to
-from .dev_auth import demo_admin_required
+from .dev_auth import admin_required
 from .models import Quiz, TrainingVersion
+from .population import library_quizzes
 from .quiz_authoring import library_quiz_problems, read_question_rows, removal_review, save_library_quiz
 from .services import DraftConflict, DraftInputError, Problem, attach_library_quiz
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def library_quiz_list(request):
-    quizzes = Quiz.objects.filter(version__isnull=True).prefetch_related("questions__options").order_by("title", "id")
+    quizzes = library_quizzes(request.employee).prefetch_related("questions__options").order_by("title", "id")
     listing = browse(request, quizzes, search_fields=("title",))
     rows = [{"quiz": quiz, "problems": library_quiz_problems(quiz),
              "question_count": quiz.questions.count()} for quiz in listing.page.object_list]
-    drafts = TrainingVersion.objects.filter(status=TrainingVersion.Status.DRAFT).order_by("title", "version_number")
+    drafts = TrainingVersion.objects.filter(
+        status=TrainingVersion.Status.DRAFT, training__is_demo=request.employee.is_demo,
+    ).order_by("title", "version_number")
     return render(request, "training/library_quiz_list.html", {"rows": rows, "drafts": drafts,
                                                                  "browse": listing})
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def new_library_quiz(request):
-    quiz = Quiz.objects.create()
+    quiz = Quiz.objects.create(is_demo=request.employee.is_demo)
     return redirect("library_quiz_editor", quiz_id=quiz.id)
 
 
@@ -55,7 +58,7 @@ def _render_library_editor(request, quiz, questions, threshold, title, *, messag
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def library_quiz_editor(request, quiz_id):
     quiz = get_object_or_404(Quiz.objects.prefetch_related("questions__options"), pk=quiz_id, version__isnull=True)
     if request.method == "GET":
@@ -100,8 +103,8 @@ def library_quiz_editor(request, quiz_id):
     return response
 
 
-def _attachment_context(training_id, version, selected_id=None, *, conflict=False, error=""):
-    library = list(Quiz.objects.filter(version__isnull=True).prefetch_related("questions__options").order_by("title", "id"))
+def _attachment_context(actor, training_id, version, selected_id=None, *, conflict=False, error=""):
+    library = list(library_quizzes(actor).prefetch_related("questions__options").order_by("title", "id"))
     rows = [{"quiz": quiz, "problems": library_quiz_problems(quiz),
              "question_count": quiz.questions.count()} for quiz in library]
     selected = next((row for row in rows if str(row["quiz"].id) == str(selected_id)), None)
@@ -115,14 +118,14 @@ def _attachment_context(training_id, version, selected_id=None, *, conflict=Fals
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def attach_library_quiz_view(request, training_id):
     if request.method == "GET":
         version = TrainingVersion.objects.filter(training_id=training_id, status=TrainingVersion.Status.DRAFT).first()
         if version is None:
             raise Http404("Draft not found.")
         return render(request, "training/quiz_attach.html",
-                      _attachment_context(training_id, version, request.GET.get("quiz")))
+                      _attachment_context(request.employee, training_id, version, request.GET.get("quiz")))
     try:
         version_id = uuid.UUID(request.POST["version_id"])
         quiz_id = uuid.UUID(request.POST["quiz_id"])
@@ -131,7 +134,7 @@ def attach_library_quiz_view(request, training_id):
     except (KeyError, ValueError, TypeError):
         return HttpResponseBadRequest("Open attachment review and choose a saved library quiz.")
     version = get_object_or_404(TrainingVersion, pk=version_id, training_id=training_id)
-    source = get_object_or_404(Quiz, pk=quiz_id, version__isnull=True)
+    source = get_object_or_404(library_quizzes(request.employee), pk=quiz_id)
     try:
         attach_library_quiz(
             version_id=version.id, quiz_id=source.id,
@@ -141,8 +144,8 @@ def attach_library_quiz_view(request, training_id):
     except DraftConflict:
         version.refresh_from_db()
         return render(request, "training/quiz_attach.html",
-                      _attachment_context(training_id, version, quiz_id, conflict=True), status=409)
+                      _attachment_context(request.employee, training_id, version, quiz_id, conflict=True), status=409)
     except DraftInputError as exc:
         return render(request, "training/quiz_attach.html",
-                      _attachment_context(training_id, version, quiz_id, error=str(exc)), status=409)
+                      _attachment_context(request.employee, training_id, version, quiz_id, error=str(exc)), status=409)
     return redirect("quiz_editor", training_id=training_id)

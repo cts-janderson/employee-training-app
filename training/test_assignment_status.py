@@ -13,7 +13,7 @@ from .models import Assignment, Employee, Quiz, QuizAttempt, Training, TrainingV
 class AssignmentStatusTests(TestCase):
     def setUp(self):
         self.now = timezone.now()
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(
             training=self.training, version_number=1, title="Status training",
             status=TrainingVersion.Status.PUBLISHED,

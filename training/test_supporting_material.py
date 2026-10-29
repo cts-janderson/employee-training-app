@@ -19,7 +19,7 @@ class SupportingMaterialTests(TestCase):
                                              role=Employee.Role.ADMINISTRATOR, is_demo=True)
         self.employee = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
         self.other = Employee.objects.create(name="Bob", email="bob@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         Slide.objects.create(version=self.version, position=1, header="Read", body="Read")
 

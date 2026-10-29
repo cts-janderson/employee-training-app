@@ -73,7 +73,7 @@ class DocumentWorkflowTests(TestCase):
         self.client = Client(HTTP_HOST="localhost")
         self.admin = Employee.objects.create(name="Admin", email="admin@example.test", role="administrator", is_demo=True)
         self.learner = Employee.objects.create(name="Learner", email="learner@example.test", is_demo=True)
-        self.training = create_training(content_format="documents")
+        self.training = create_training(is_demo=True, content_format="documents")
         self.version = self.training.versions.get()
         self.url = reverse("draft_editor", args=[self.training.pk])
 
@@ -119,7 +119,7 @@ class DocumentWorkflowTests(TestCase):
         parent = self.edit("add_section")
         child = self.edit("add_section", parent=parent.pk)
         doc = self.doc()
-        other = TrainingVersion.objects.create(training=Training.objects.create(), version_number=1, content_format="documents")
+        other = TrainingVersion.objects.create(training=Training.objects.create(is_demo=True), version_number=1, content_format="documents")
         foreign = OutlineItem.objects.create(version=other, kind="section", position=1, title="Other")
         for target, destination in [(parent.pk, child.pk), (child.pk, doc.pk), (doc.pk, foreign.pk)]:
             revision = self.version.revision
@@ -249,7 +249,7 @@ class DocumentWorkflowTests(TestCase):
         self.assertEqual(assignment.document_progress.count(),1)
 
     def test_legacy_revision_conversion_preserves_text_order_urls_and_evidence(self):
-        legacy = create_training().versions.get()
+        legacy = create_training(is_demo=True).versions.get()
         legacy.title="Legacy"
         legacy.save()
         slide=Slide.objects.create(version=legacy,position=1,header="Original",body="  text\n<script>x</script>",footer="Footer\n exact ")
@@ -270,7 +270,7 @@ class DocumentWorkflowTests(TestCase):
         response=self.client.post(reverse("new_training"),{"content_format":"documents"},follow=True)
         self.assertContains(response,"Training outline")
         self.assertContains(response,"Add document")
-        legacy=create_training().versions.get()
+        legacy=create_training(is_demo=True).versions.get()
         slide=Slide.objects.create(version=legacy,position=1,header="Read",body="Body",footer="Footer")
         response=self.client.post(reverse("convert_documents",args=[legacy.training_id]),{"revision":0,"confirm":"convert"},follow=True)
         self.assertContains(response,"Read")
@@ -364,7 +364,7 @@ class ConcurrentDocumentTests(TransactionTestCase):
             return list(pool.map(run,range(2)))
 
     def test_simultaneous_outline_saves_accept_one_revision(self):
-        version=create_training(content_format="documents").versions.get()
+        version=create_training(is_demo=True, content_format="documents").versions.get()
         def work(index):
             try:
                 edit_outline(version_id=version.pk,revision=0,action="add_document")
@@ -377,7 +377,7 @@ class ConcurrentDocumentTests(TransactionTestCase):
         self.assertEqual(version.outline_items.count(),1)
 
     def test_simultaneous_acknowledgments_record_one_completion(self):
-        version=create_training(content_format="documents").versions.get()
+        version=create_training(is_demo=True, content_format="documents").versions.get()
         version,item=edit_outline(version_id=version.pk,revision=0,action="add_document",training_title="Safety")
         version,item=edit_outline(version_id=version.pk,revision=1,action="save",target=item.pk,title="Read",body=plain_body("Read"))
         publish_saved_draft(version_id=version.pk,expected_revision=2)

@@ -8,6 +8,7 @@ from django.db.models.functions import Coalesce, Lower, NullIf
 
 from .assignment_reports import ReportFilterError, ReportFilters, report_assignments
 from .models import AssignmentDocumentProgress, OutlineItem, AssignmentSlideProgress, Employee, Slide, Training, TrainingVersion
+from .population import employees as employees_in, trainings as trainings_in
 
 MODES = (("eligible", "Pending and completed"), ("canceled", "Canceled history"),
          ("waived", "Waived history"), ("archived", "Archived history"))
@@ -76,12 +77,12 @@ class CompletionRequest:
         return urlencode(self.params(**changes))
 
 
-def population(scope, *, now, training=None, employee=None):
+def population(scope, *, is_demo, now, training=None, employee=None):
     filters = ReportFilters(state="all" if scope.mode == "eligible" else scope.mode,
                             activity=scope.activity, q=scope.q,
                             training_id=training.pk if training else None,
                             employee_id=employee.pk if employee else None)
-    assignments = report_assignments(filters, now=now)
+    assignments = report_assignments(filters, is_demo=is_demo, now=now)
     if scope.mode == "eligible":
         assignments = assignments.filter(Q(ending_value__isnull=True) | Q(ending_value="completed"))
     if scope.version:
@@ -110,13 +111,13 @@ def totals(assignments, scope):
     return result
 
 
-def summaries(assignments, scope):
+def summaries(assignments, scope, *, is_demo):
     """Correlated aggregates keep evidence joins out of counts and retain empty entities."""
     if scope.view == "training":
-        entities = Training.objects.with_display_title().filter(versions__status="published").distinct()
+        entities = trainings_in(is_demo).with_display_title().filter(versions__status="published").distinct()
         grouping, title = "training_id", "display_title"
     else:
-        entities = Employee.objects.filter(is_demo=True)
+        entities = employees_in(is_demo)
         if scope.activity != "all":
             entities = entities.filter(is_active=scope.activity == "active")
         grouping, title = "employee_id", "name"

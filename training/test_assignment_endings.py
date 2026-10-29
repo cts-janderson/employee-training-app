@@ -15,7 +15,7 @@ from .models import Assignment, AssignmentHistory, Employee, Ending, Notificatio
 class AssignmentEndingTests(TestCase):
     def setUp(self):
         self.employee = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1,
                                                       status=TrainingVersion.Status.PUBLISHED)
         self.now = timezone.now()

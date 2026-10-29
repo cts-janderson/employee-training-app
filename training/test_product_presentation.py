@@ -38,10 +38,10 @@ class ProductPresentationTests(TestCase):
     def setUp(self):
         self.client = Client(HTTP_HOST="localhost")
         self.admin = Employee.objects.create(name="Administrator", email="admin@example.test", role="administrator", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         Slide.objects.create(version=self.version, position=1, header="Read", body="Take care")
-        self.quiz = Quiz.objects.create(title="Safety check", passing_percent=75)
+        self.quiz = Quiz.objects.create(is_demo=True, title="Safety check", passing_percent=75)
         self.ordering = Question.objects.create(quiz=self.quiz, position=1, type="ordering", prompt="Order these steps")
         for position, text in enumerate(("Inspect", "Report"), 1):
             QuestionOption.objects.create(question=self.ordering, position=position, text=text, required_rank=position)
@@ -72,7 +72,7 @@ class ProductPresentationTests(TestCase):
         self.assertNotContains(response, "answer keys are hidden")
 
     def test_saved_and_conflict_feedback_does_not_expose_internal_counters(self):
-        quiz = Quiz.objects.create()
+        quiz = Quiz.objects.create(is_demo=True)
         url = reverse("library_quiz_editor", args=[quiz.pk])
         payload = {"revision": 0, "title": "New quiz", "passing_percent": "75", "action": "save"}
         saved = self.client.post(url, payload, follow=True)

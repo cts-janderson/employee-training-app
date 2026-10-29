@@ -20,7 +20,7 @@ class GroupTests(TestCase):
         self.alice = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
         self.bob = Employee.objects.create(name="Bob", email="bob@example.test", is_demo=True)
         self.group = create_group(name="Team", actor=self.admin)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         Slide.objects.create(version=self.version, position=1, header="Read", body="Read")
         self.version.status = TrainingVersion.Status.PUBLISHED

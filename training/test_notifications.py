@@ -17,7 +17,7 @@ from django.utils import timezone
 from .assignments import (
     acknowledge_slide, archive_assignment, cancel_assignment, change_assignment_deadline, create_assignments,
 )
-from .employees import update_demo_employee
+from .employees import update_employee
 from .models import (
     Employee, Notification, NotificationDeliveryAttempt, NotificationReconciliation,
     Slide, Training, TrainingVersion,
@@ -56,7 +56,7 @@ class NotificationFixtures:
                                            verified_email="bob@example.test", is_demo=True)
         self.carol = Employee.objects.create(name="Carol", email="carol@example.test",
                                              verified_email="carol@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Data Safety")
         self.slide = Slide.objects.create(version=self.version, position=1, header="Read", body="Material")
         self.version.status = TrainingVersion.Status.PUBLISHED
@@ -204,7 +204,7 @@ class NotificationWorkflowTests(NotificationFixtures, TestCase):
         self.assertEqual(notification.last_error_code, "unverified_address")
         self.assertEqual(notification.delivery_attempts.count(), 0)
         self.assertEqual(self.client.post(reverse("retry_notification", args=[notification.id])).status_code, 400)
-        update_demo_employee(employee_id=self.alice.id, name="Alice", email="new.alice@example.test",
+        update_employee(employee_id=self.alice.id, name="Alice", email="new.alice@example.test",
                              active=True, actor=self.admin)
         new_due = self.today + timedelta(days=4)
         change_assignment_deadline(assignment_id=assignment.id, actor=self.admin,

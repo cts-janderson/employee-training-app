@@ -24,7 +24,7 @@ class LearnerReviewAccessTests(TestCase):
                                              role=Employee.Role.ADMINISTRATOR, is_demo=True)
         self.owner = Employee.objects.create(name="Owner", email="review.owner@example.test", is_demo=True)
         self.other = Employee.objects.create(name="Other", email="review.other@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Review")
         self.slide = Slide.objects.create(version=self.version, position=1, header="Read", body="Read")
         self.quiz = Quiz.objects.create(version=self.version, passing_percent=80)

@@ -18,7 +18,7 @@ class WaiverTests(TestCase):
         self.admin = Employee.objects.create(name="Admin", email="demo.admin@example.test",
                                              role=Employee.Role.ADMINISTRATOR, is_demo=True)
         self.employee = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         self.slide = Slide.objects.create(version=self.version, position=1, header="Read", body="Read")
         self.version.status = TrainingVersion.Status.PUBLISHED
@@ -77,10 +77,10 @@ class WaiverTests(TestCase):
 
     def test_dashboard_export_and_constraint_treat_waiver_as_its_own_state(self):
         waive_assignment(assignment_id=self.assignment.id, actor=self.admin, reason="Waived", now=self.now)
-        self.assertFalse(report_assignments(ReportFilters(), now=self.now).exists())
-        rows = report_rows(report_assignments(ReportFilters(state="waived"), now=self.now), now=self.now)
+        self.assertFalse(report_assignments(ReportFilters(), is_demo=True, now=self.now).exists())
+        rows = report_rows(report_assignments(ReportFilters(state="waived"), is_demo=True, now=self.now), now=self.now)
         self.assertEqual((rows[0].state, rows[0].deadline), ("Waived", "—"))
-        exported = list(export_rows(ReportFilters(state="waived"), now=self.now, zone_name="UTC"))
+        exported = list(export_rows(ReportFilters(state="waived"), is_demo=True, now=self.now, zone_name="UTC"))
         self.assertEqual(exported[1][8], "Waived")
         self.assignment.refresh_from_db()
         with self.assertRaises(IntegrityError), transaction.atomic():

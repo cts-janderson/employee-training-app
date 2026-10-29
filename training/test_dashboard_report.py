@@ -16,7 +16,7 @@ class DashboardReportTests(TestCase):
     def setUp(self):
         self.now = timezone.now()
         self.employee = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         Quiz.objects.create(version=self.version, passing_percent=80)
         self.version.status = TrainingVersion.Status.PUBLISHED
@@ -45,9 +45,9 @@ class DashboardReportTests(TestCase):
         self.attempt(1, passed=True, score=2)
         self.attempt(2, passed=False, score=0)
         filters = ReportFilters(state="all")
-        assignments = quiz_outcome_assignments(filters, now=self.now)
+        assignments = quiz_outcome_assignments(filters, is_demo=True, now=self.now)
         row = report_rows(assignments, now=self.now)[0]
-        chart = dashboard_report(dashboard_request({"mode": "quiz"}), assignments, [row], now=self.now)["quiz_chart"]
+        chart = dashboard_report(dashboard_request({"mode": "quiz"}), assignments, [row], is_demo=True, now=self.now)["quiz_chart"]
         person = chart["rows"][0]["people"][0]
         self.assertEqual((row.latest_score, row.passing_score, person["latest_score"]),
                          ("0.0%", "100.0%", "0.0%"))
@@ -80,16 +80,16 @@ class DashboardReportTests(TestCase):
                   "activity": "all", "employee": str(self.employee.id), "training": str(self.training.id),
                   "q": "Safety"}
         pending = dashboard_request(params)
-        context = dashboard_report(pending, Assignment.objects.none(), [], now=self.now)
+        context = dashboard_report(pending, Assignment.objects.none(), [], is_demo=True, now=self.now)
         self.assertEqual(context["active_filters"], [
             "State: All", "Progress: In Progress", "Deadline: Overdue", "Activity: All",
             "Employee: Alice", "Training: Safety", "Search: Safety",
         ])
         quiz = dashboard_request({**params, "mode": "quiz"})
-        quiz_context = dashboard_report(quiz, Assignment.objects.none(), [], now=self.now)
+        quiz_context = dashboard_report(quiz, Assignment.objects.none(), [], is_demo=True, now=self.now)
         self.assertEqual(quiz_context["active_filters"], [
             "Activity: All", "Employee: Alice", "Training: Safety", "Search: Safety",
         ])
         unknown = dashboard_request({"state": "all", "training": str(uuid.uuid4())})
         self.assertIn("Training: Unknown training",
-                      dashboard_report(unknown, Assignment.objects.none(), [], now=self.now)["active_filters"])
+                      dashboard_report(unknown, Assignment.objects.none(), [], is_demo=True, now=self.now)["active_filters"])

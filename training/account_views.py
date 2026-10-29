@@ -31,7 +31,7 @@ from .accounts import (
     verification_tokens,
     verify_email,
 )
-from .dev_auth import account_admin_required
+from .dev_auth import account_admin_required, mark_real_session, clear_real_session
 from .models import Employee
 
 INVALID_LINK = "This link is invalid or has expired. Request a new one."
@@ -66,7 +66,14 @@ class SignInView(auth_views.LoginView):
         response = super().form_valid(form)
         # A real session replaces any demo choice.
         self.request.session.pop("demo_employee_id", None)
-        return response
+        return mark_real_session(response)
+
+
+class SignOutView(auth_views.LogoutView):
+    next_page = "sign_in"
+
+    def post(self, request, *args, **kwargs):
+        return clear_real_session(super().post(request, *args, **kwargs))
 
 
 @require_http_methods(["GET", "POST"])

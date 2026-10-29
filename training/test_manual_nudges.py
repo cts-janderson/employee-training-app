@@ -12,7 +12,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from .assignments import acknowledge_slide, cancel_assignment, create_assignments
-from .employees import update_demo_employee
+from .employees import update_employee
 from .models import Assignment, Employee, Notification, Slide, Training, TrainingVersion
 from .notifications import (
     ManualNudgeIneligible, ManualNudgeRateLimited, NotificationError, TransientDeliveryError,
@@ -42,7 +42,7 @@ class ManualNudgeTests(TestCase):
                                                    role=Employee.Role.ADMINISTRATOR, is_demo=True)
         self.employee = Employee.objects.create(name="Alice", email="alice@example.test",
                                                 verified_email="alice@example.test", is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         Slide.objects.create(version=self.version, position=1, header="Read", body="Material")
         self.version.status = TrainingVersion.Status.PUBLISHED
@@ -121,7 +121,7 @@ class ManualNudgeTests(TestCase):
 
     def test_ineligible_assignments_and_inactive_recipient_are_rejected_or_suppressed(self):
         nudge = self.manual()
-        update_demo_employee(employee_id=self.employee.id, name=self.employee.name,
+        update_employee(employee_id=self.employee.id, name=self.employee.name,
                              email=self.employee.email, active=False, actor=self.admin,
                              now=self.start + timedelta(minutes=1))
         with self.assertRaises(ManualNudgeIneligible):
@@ -129,7 +129,7 @@ class ManualNudgeTests(TestCase):
         process_ready_notifications(now=self.start + timedelta(minutes=2))
         nudge.refresh_from_db()
         self.assertEqual(nudge.suppression_reason, "employee_inactive")
-        update_demo_employee(employee_id=self.employee.id, name=self.employee.name,
+        update_employee(employee_id=self.employee.id, name=self.employee.name,
                              email=self.employee.email, active=True, actor=self.admin,
                              now=self.start + timedelta(minutes=3))
         cancel_assignment(assignment_id=self.assignment.id, actor=self.admin, reason="No longer needed",
@@ -199,7 +199,7 @@ class ConcurrentManualNudgeTests(TransactionTestCase):
                                           role=Employee.Role.ADMINISTRATOR, is_demo=True)
                   for number in (1, 2)]
         employee = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
-        training = Training.objects.create()
+        training = Training.objects.create(is_demo=True)
         version = TrainingVersion.objects.create(training=training, version_number=1, title="Safety")
         assignment = Assignment.objects.create(
             employee=employee, training=training, version=version,

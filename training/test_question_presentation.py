@@ -21,7 +21,7 @@ class QuestionPresentationTests(TestCase):
                                              role=Employee.Role.ADMINISTRATOR, is_demo=True)
         self.learner = Employee.objects.create(name="Learner", email="presentation.learner@example.test",
                                                is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         self.slide = Slide.objects.create(version=self.version, position=1, header="Read", body="Material")
         self.quiz = Quiz.objects.create(version=self.version, passing_percent=80)
@@ -67,7 +67,7 @@ class QuestionPresentationTests(TestCase):
         self.assert_editor_controls(self.client.get(reverse("quiz_editor", args=[self.training.id])))
 
     def test_library_quiz_editor_uses_each_type_control(self):
-        library = Quiz.objects.create(title="Library", passing_percent=80)
+        library = Quiz.objects.create(is_demo=True, title="Library", passing_percent=80)
         self.questions = self.populate(library)
         self.assert_editor_controls(self.client.get(reverse("library_quiz_editor", args=[library.id])))
 

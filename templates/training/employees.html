@@ -5,26 +5,27 @@
   {% if error %}<p class="error" role="alert"><a href="#employee-{{ error_field }}">{{ error }}</a></p>{% endif %}
   <form class="card employee-form" method="post">
     {% csrf_token %}
-    <h2>Add employee</h2>
+    <h2>{% if invites %}Invite employee{% else %}Add employee{% endif %}</h2>
+    {% if invites %}<p class="muted">They get an email with a link to set their password. You can assign training before they finish.</p>{% endif %}
     <div class="employee-form-fields">
       <div><label for="employee-name">Name</label><input id="employee-name" name="name" value="{{ form_name }}" required maxlength="200" {% if error_field == "name" %}aria-invalid="true" aria-describedby="employee-error"{% endif %}></div>
       <div><label for="employee-email">Email</label><input id="employee-email" name="email" type="email" value="{{ form_email }}" required {% if error_field == "email" %}aria-invalid="true" aria-describedby="employee-error"{% endif %}></div>
-      <div class="employee-form-action"><button type="submit">Add employee</button></div>
+      <div class="employee-form-action"><button type="submit">{% if invites %}Send invitation{% else %}Add employee{% endif %}</button></div>
     </div>
     {% if error %}<p class="field-error" id="employee-error">{{ error }}</p>{% endif %}
   </form>
   <div class="section-heading"><h2>Directory</h2><span class="section-count">{{ employees|length }} employee{{ employees|length|pluralize }}</span></div>
   {% with browse_label="employees" %}{% include "training/_browse_controls.html" %}{% endwith %}
   <div class="collection-panel">
-  {% for employee in employees %}
+  {% for row in employees %}{% with employee=row.employee %}
     <article class="collection-row employee-row">
       <span class="person-avatar" aria-hidden="true">{{ employee.name|first|upper|default:"?" }}</span>
       <div class="record-main"><h3><a href="{% url 'edit_employee' employee.id %}?return_to={{ browse.return_to|urlencode }}">{{ employee.name }}</a></h3><p class="record-subtitle">{{ employee.email }}</p></div>
       <span class="record-role">{{ employee.get_role_display }}</span>
-      <span class="record-status"><span class="badge {% if employee.is_active %}success{% else %}gray{% endif %}">{% if employee.is_active %}Active{% else %}Inactive{% endif %}</span></span>
+      <span class="record-status"><span class="badge {{ row.status.1 }}">{{ row.status.0 }}</span></span>
       <a class="text-action" href="{% url 'edit_employee' employee.id %}?return_to={{ browse.return_to|urlencode }}">View employee</a>
     </article>
-  {% empty %}
+  {% endwith %}{% empty %}
     <p class="empty-state">No employees yet.</p>
   {% endfor %}
   </div>

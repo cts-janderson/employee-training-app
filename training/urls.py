@@ -1,4 +1,3 @@
-from django.contrib.auth.views import LogoutView
 from django.urls import path
 
 from . import assignment_admin_views, assignment_views, employee_views, group_views, library_quiz_views, notification_views, quiz_learner_views, quiz_views, views
@@ -9,7 +8,7 @@ urlpatterns = [
     path("health/", views.health, name="health"),
     path("account/", account_views.account_status, name="account_status"),
     path("account/sign-in/", account_views.SignInView.as_view(), name="sign_in"),
-    path("account/sign-out/", LogoutView.as_view(next_page="sign_in"), name="sign_out"),
+    path("account/sign-out/", account_views.SignOutView.as_view(), name="sign_out"),
     path("account/register/", account_views.register_view, name="register"),
     path("account/verify/<uidb64>/<token>/", account_views.verify_email_view, name="verify_email"),
     path("account/password/", account_views.PasswordChange.as_view(), name="password_change"),

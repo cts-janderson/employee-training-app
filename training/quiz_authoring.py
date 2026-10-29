@@ -183,7 +183,7 @@ def save_quiz_draft(*, version_id, expected_revision, threshold_value, rows, act
         if action == "add_quiz":
             if quiz is not None:
                 raise DraftInputError("This draft already has a quiz.")
-            Quiz.objects.create(version=version)
+            Quiz.objects.create(version=version, is_demo=version.training.is_demo)
         elif action == "remove_quiz":
             if quiz is None:
                 raise DraftInputError("This draft has no quiz.")

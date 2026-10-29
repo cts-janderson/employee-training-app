@@ -12,7 +12,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .assignments import acknowledge_slide, cancel_assignment, change_assignment_deadline, create_assignments
-from .employees import update_demo_employee
+from .employees import update_employee
 from .models import Employee, Notification, Slide, Training, TrainingVersion
 from .notifications import (
     TransientDeliveryError, claim_next_notification, process_ready_notifications,
@@ -45,7 +45,7 @@ class ReminderWorkflowTests(TestCase):
         self.alice = self.employee("Alice")
         self.bob = self.employee("Bob")
         self.carol = self.employee("Carol")
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         self.slide = Slide.objects.create(version=self.version, position=1, header="Read", body="Material")
         self.version.status = TrainingVersion.Status.PUBLISHED
@@ -74,7 +74,7 @@ class ReminderWorkflowTests(TestCase):
         )
 
     def activity(self, employee, active, at):
-        return update_demo_employee(
+        return update_employee(
             employee_id=employee.id, name=employee.name, email=employee.email,
             active=active, actor=self.admin, now=at,
         )

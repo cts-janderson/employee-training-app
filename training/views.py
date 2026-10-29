@@ -10,8 +10,9 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 
 from .authoring_ui import draft_errors, record_save, saved_slide_rows, submitted_slide_rows
 from .browsing import browse, safe_return_to
-from .dev_auth import demo_actor_required, demo_admin_required
+from .dev_auth import actor_required, admin_required
 from .models import Employee, Quiz, Training, TrainingVersion
+from .population import trainings as trainings_in
 from .services import (
     DraftConflict,
     DraftInputError,
@@ -30,11 +31,11 @@ from .quiz_views import editable_version
 
 
 @require_GET
-@demo_actor_required
+@actor_required
 def home(request):
     if request.employee.role != Employee.Role.ADMINISTRATOR:
         return redirect("my_training")
-    return redirect("training_list" if request.employee.is_demo else "account_admin")
+    return redirect("training_list")
 
 
 @require_GET
@@ -43,7 +44,7 @@ def health(request):
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def training_list(request):
     status_filter = request.GET.get("status", "")
     if status_filter not in {"draft", "published"}:
@@ -56,7 +57,7 @@ def training_list(request):
         document_count=Count("outline_items", filter=Q(outline_items__kind="document"), distinct=True),
         has_quiz=Exists(Quiz.objects.filter(version_id=OuterRef("pk"))),
     ).order_by("version_number")
-    trainings = Training.objects.with_display_title().prefetch_related(
+    trainings = trainings_in(request.employee).with_display_title().prefetch_related(
         Prefetch("versions", queryset=version_query),
     ).order_by(Lower("display_title").desc() if sort == "-title" else Lower("display_title"), "id")
     if status_filter:
@@ -85,23 +86,24 @@ def training_list(request):
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def new_training(request):
     try:
-        training = create_training(content_format=request.POST.get("content_format", "slides"))
+        training = create_training(is_demo=request.employee.is_demo,
+                                       content_format=request.POST.get("content_format", "slides"))
     except DraftInputError as exc:
         return HttpResponseBadRequest(str(exc))
     return redirect("draft_editor", training_id=training.id)
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def create_content(request):
     return render(request, "training/create_content.html")
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def new_revision(request, training_id):
     get_object_or_404(Training, pk=training_id)
     try:
@@ -114,7 +116,7 @@ def new_revision(request, training_id):
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def draft_editor(request, training_id):
     version = editable_version(training_id, for_post=request.method == "POST")
     if version.content_format == "documents":
@@ -221,7 +223,7 @@ def _publication_review_page(request, version, *, conflict=False, blocked=None, 
 
 
 @require_http_methods(["GET", "POST"])
-@demo_admin_required
+@admin_required
 def publication_review(request, training_id):
     get_object_or_404(Training, pk=training_id)
     if request.method == "GET":
@@ -268,7 +270,7 @@ def _draft_conflict(request, version, submitted, title, description):
 
 
 @require_GET
-@demo_admin_required
+@admin_required
 def preview(request, training_id, version_id):
     version = get_object_or_404(TrainingVersion, pk=version_id, training_id=training_id)
     quiz = Quiz.objects.filter(version=version).prefetch_related("questions__options").first()
@@ -279,7 +281,7 @@ def preview(request, training_id, version_id):
 
 
 @require_POST
-@demo_admin_required
+@admin_required
 def save_materials_view(request, training_id):
     version = get_object_or_404(TrainingVersion, training_id=training_id, status=TrainingVersion.Status.DRAFT)
     try:

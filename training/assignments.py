@@ -28,6 +28,7 @@ from .models import (
     TrainingVersion,
     Training,
 )
+from .population import employees as employees_in, groups as groups_in, trainings as trainings_in
 from .renewals import renewal_candidates
 
 
@@ -241,13 +242,14 @@ class Recipients:
     def fingerprint_parts(self):
         raise NotImplementedError
 
-    def check_before_version(self):
+    def check_before_version(self, *, is_demo):
         pass
 
     def check_version(self, version):
         pass
 
-    def resolve(self, *, lock=False):
+    def resolve(self, *, is_demo, lock=False):
+        """Recipients in one population: the population of the training being assigned."""
         raise NotImplementedError
 
     def operation_fields(self):
@@ -278,9 +280,9 @@ class EmployeeListRecipients(Recipients):
     def fingerprint_parts(self):
         return [sorted(str(value) for value in self.employee_ids)]
 
-    def resolve(self, *, lock=False):
+    def resolve(self, *, is_demo, lock=False):
         _, ids = parse_assignment_request(uuid.uuid4(), self.employee_ids)
-        return [ResolvedRecipient(employee) for employee in load_assignment_employees(ids, lock=lock)]
+        return [ResolvedRecipient(employee) for employee in load_assignment_employees(ids, is_demo=is_demo, lock=lock)]
 
 
 @dataclass(frozen=True)
@@ -291,12 +293,12 @@ class EmployeeGroupRecipients(Recipients):
     def fingerprint_parts(self):
         return ["group", str(self.group_id)]
 
-    def check_before_version(self):
-        if not EmployeeGroup.objects.filter(pk=self.group_id).exists():
+    def check_before_version(self, *, is_demo):
+        if not groups_in(is_demo).filter(pk=self.group_id).exists():
             raise AssignmentInputError("Choose a valid employee group.")
 
-    def resolve(self, *, lock=False):
-        group = EmployeeGroup.objects
+    def resolve(self, *, is_demo, lock=False):
+        group = groups_in(is_demo)
         if lock:
             group = group.select_for_update()
         try:
@@ -308,7 +310,7 @@ class EmployeeGroupRecipients(Recipients):
             raise AssignmentInputError("This group has no members.")
         if len(ids) > MAX_RECIPIENTS:
             raise AssignmentInputError("Choose a group with at most 100 members.")
-        return [ResolvedRecipient(employee) for employee in load_assignment_employees(ids, lock=lock)]
+        return [ResolvedRecipient(employee) for employee in load_assignment_employees(ids, is_demo=is_demo, lock=lock)]
 
     def operation_fields(self):
         return {**super().operation_fields(), "group_id": self.group_id}
@@ -331,9 +333,9 @@ class RenewalRecipients(Recipients):
         if self.training_id != version.training_id:
             raise AssignmentInputError("Choose a version of the training being renewed.")
 
-    def resolve(self, *, lock=False):
+    def resolve(self, *, is_demo, lock=False):
         try:
-            training = Training.objects.get(pk=self.training_id)
+            training = trainings_in(is_demo).get(pk=self.training_id)
         except Training.DoesNotExist:
             raise AssignmentInputError("Choose a valid renewal training.") from None
         candidates = renewal_candidates(training, as_of=self.as_of)
@@ -341,7 +343,8 @@ class RenewalRecipients(Recipients):
             raise AssignmentInputError("No completed assignments are due for renewal on or before this date.")
         if len(candidates) > MAX_RECIPIENTS:
             raise AssignmentInputError("Choose at most 100 renewal recipients.")
-        employees = load_assignment_employees([candidate.employee.id for candidate in candidates], lock=lock)
+        employees = load_assignment_employees([candidate.employee.id for candidate in candidates],
+                                              is_demo=is_demo, lock=lock)
         if lock:
             candidates = renewal_candidates(training, as_of=self.as_of,
                                             employee_ids=[employee.id for employee in employees], lock=True)
@@ -382,8 +385,9 @@ def parse_assignment_request(operation_id, employee_ids):
     return _parse_operation_id(operation_id), _parse_employee_ids(employee_ids)
 
 
-def load_assignment_employees(employee_ids, *, lock=False):
-    employees = Employee.objects.filter(pk__in=employee_ids, is_demo=True)
+def load_assignment_employees(employee_ids, *, is_demo, lock=False):
+    # Under lock, this also rechecks approval: a pending or rejected applicant is not found.
+    employees = employees_in(is_demo).filter(pk__in=employee_ids)
     if lock:
         employees = employees.select_for_update().order_by("pk")
     else:
@@ -439,13 +443,13 @@ def create_assignments(*, operation_id, actor, version_id, employee_ids=None, re
     now = now or timezone.now()
     due_date = _parse_date(due_date_value)
     fingerprint = _fingerprint(actor.id, version_id, due_date, recipients=recipients)
-    recipients.check_before_version()
+    recipients.check_before_version(is_demo=actor.is_demo)
     with transaction.atomic():
         try:
             version = TrainingVersion.objects.select_related("training").get(pk=version_id)
         except TrainingVersion.DoesNotExist:
             raise AssignmentInputError("Choose a published training version.") from None
-        if version.status != TrainingVersion.Status.PUBLISHED:
+        if version.status != TrainingVersion.Status.PUBLISHED or version.training.is_demo != actor.is_demo:
             raise AssignmentInputError("Choose a published training version.")
         recipients.check_version(version)
         operation, created = AssignmentOperation.objects.get_or_create(
@@ -460,7 +464,7 @@ def create_assignments(*, operation_id, actor, version_id, employee_ids=None, re
 
         due_date, zone_name, due_at = validate_new_due_date(due_date, now=now)
 
-        resolved = recipients.resolve(lock=True)
+        resolved = recipients.resolve(is_demo=version.training.is_demo, lock=True)
         results = []
         for recipient in resolved:
             employee = recipient.employee
@@ -512,7 +516,7 @@ def change_assignment_deadline(*, assignment_id, actor, due_date_value, now=None
     now = now or timezone.now()
     new_date = _parse_date(due_date_value)
     with transaction.atomic():
-        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=True)
+        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=actor.is_demo)
         _require_outstanding(assignment, "Only an active, incomplete assignment can change its deadline.")
         if new_date == assignment.due_date:
             return assignment, None
@@ -586,7 +590,7 @@ def end_assignment(*, assignment_id, ending, actor, reason, now=None):
     reason = _clean_reason(reason, message=rule.reason_message)
     now = now or timezone.now()
     with transaction.atomic():
-        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=True)
+        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=actor.is_demo)
         if ending == Ending.WAIVED and assignment.employee_id == actor.id:
             raise AssignmentAccessError("Another administrator must waive your own assignment.")
         _require_outstanding(assignment, rule.conflict)
@@ -609,7 +613,7 @@ def archive_assignment(*, assignment_id, actor, reason, now=None):
     reason = _clean_reason(reason, message="Enter an archive reason of at most 1000 characters.")
     now = now or timezone.now()
     with transaction.atomic():
-        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=True)
+        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=actor.is_demo)
         if assignment.archived_at:
             return assignment
         if assignment.is_outstanding:
@@ -627,7 +631,7 @@ def restore_assignment(*, assignment_id, actor, now=None):
     _administrator_can_change(actor)
     now = now or timezone.now()
     with transaction.atomic():
-        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=True)
+        assignment = Assignment.objects.select_for_update().get(pk=assignment_id, employee__is_demo=actor.is_demo)
         if not assignment.archived_at:
             return assignment
         AssignmentHistory.objects.create(

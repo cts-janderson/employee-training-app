@@ -19,7 +19,7 @@ class QuizOutcomesChartTests(TestCase):
         self.now = timezone.now()
         Employee.objects.create(name="Administrator", email="demo.admin@example.test",
                                 role=Employee.Role.ADMINISTRATOR, is_demo=True)
-        self.training = Training.objects.create()
+        self.training = Training.objects.create(is_demo=True)
         self.version = TrainingVersion.objects.create(
             training=self.training, version_number=1, title="Safety",
         )
@@ -59,7 +59,7 @@ class QuizOutcomesChartTests(TestCase):
         self.assignment("Inactive", inactive=True)
         self.assignment("Archived", archived=True)
         self.assignment("Canceled", canceled=True)
-        slide_training = Training.objects.create()
+        slide_training = Training.objects.create(is_demo=True)
         slide_version = TrainingVersion.objects.create(
             training=slide_training, version_number=1, title="Slide only",
             status=TrainingVersion.Status.PUBLISHED,
@@ -105,7 +105,7 @@ class QuizOutcomesChartTests(TestCase):
             assignment = self.assignment(f"Learner{index:02}")
             if index < 4:
                 self.attempt(assignment, passed=False, minutes=index)
-        other = Training.objects.create()
+        other = Training.objects.create(is_demo=True)
         other_version = TrainingVersion.objects.create(
             training=other, version_number=1, title="Privacy",
         )
@@ -130,7 +130,7 @@ class QuizOutcomesChartTests(TestCase):
         self.assertIn(f"training={self.training.id}", response.context["browse"].previous_url)
 
     def test_no_quiz_assignments_have_an_explicit_empty_state(self):
-        slide_training = Training.objects.create()
+        slide_training = Training.objects.create(is_demo=True)
         slide_version = TrainingVersion.objects.create(
             training=slide_training, version_number=1, title="Slide only",
             status=TrainingVersion.Status.PUBLISHED,
@@ -153,7 +153,7 @@ class QuizOutcomesChartTests(TestCase):
         inactive = self.assignment("Inactive", inactive=True)
 
         query = quiz_outcome_assignments(ReportFilters(state="pending", activity="all", q="Safety"),
-                                         now=self.now)
+                                         is_demo=True, now=self.now)
         self.assertEqual(set(query.values_list("id", flat=True)), {passed.id, inactive.id})
 
     def test_repeat_cycles_are_separate_records_with_their_own_outcomes(self):
@@ -180,7 +180,7 @@ class QuizOutcomesChartTests(TestCase):
 
     def test_chart_plots_eight_trainings_and_values_include_all_nine(self):
         for index in range(9):
-            training = Training.objects.create()
+            training = Training.objects.create(is_demo=True)
             version = TrainingVersion.objects.create(
                 training=training, version_number=1, title=f"Course {index}",
             )

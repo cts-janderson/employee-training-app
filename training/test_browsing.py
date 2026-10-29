@@ -39,7 +39,7 @@ class BrowsingTests(TestCase):
             self.assertEqual(safe_return_to(invalid, "employee_directory"), path)
 
     def test_training_library_shows_both_states_and_keeps_published_title(self):
-        training = Training.objects.create()
+        training = Training.objects.create(is_demo=True)
         TrainingVersion.objects.create(training=training, version_number=1,
                                        status=TrainingVersion.Status.PUBLISHED,
                                        title="Safety basics", description="Published overview")
@@ -57,12 +57,12 @@ class BrowsingTests(TestCase):
         self.assertContains(response, "Assign training")
 
     def test_training_library_filters_overlap_and_survive_search_and_pagination(self):
-        draft_only = Training.objects.create()
+        draft_only = Training.objects.create(is_demo=True)
         TrainingVersion.objects.create(training=draft_only, version_number=1, title="Draft only")
-        published_only = Training.objects.create()
+        published_only = Training.objects.create(is_demo=True)
         TrainingVersion.objects.create(training=published_only, version_number=1,
                                        status=TrainingVersion.Status.PUBLISHED, title="Published only")
-        both = Training.objects.create()
+        both = Training.objects.create(is_demo=True)
         TrainingVersion.objects.create(training=both, version_number=1,
                                        status=TrainingVersion.Status.PUBLISHED, title="Safety")
         TrainingVersion.objects.create(training=both, version_number=2, title="Aardvark update")

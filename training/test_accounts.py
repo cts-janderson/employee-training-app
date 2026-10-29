@@ -110,7 +110,7 @@ class AccountTests(TestCase):
         invited = Employee.objects.get(email="invited@example.com")
         self.assertEqual(invited.approval_status, Employee.Approval.APPROVED)
         self.assertFalse(invited.has_usable_password())
-        training = Training.objects.create()
+        training = Training.objects.create(is_demo=True)
         version = TrainingVersion.objects.create(training=training, version_number=1, title="Safety")
         Slide.objects.create(version=version, position=1, header="Read", body="Read")
         version.status = TrainingVersion.Status.PUBLISHED
@@ -196,11 +196,6 @@ class AccountTests(TestCase):
         self.client.post(reverse("account_admin"), {"action": "approve", "employee_id": applicant.pk})
         applicant.refresh_from_db()
         self.assertEqual(applicant.approval_status, Employee.Approval.APPROVED)
-
-    def test_real_administrator_cannot_use_demo_administrator_pages(self):
-        self.sign_in("admin@example.com")
-        self.assertRedirects(self.client.get(reverse("home")), reverse("account_admin"))
-        self.assertContains(self.client.get(reverse("training_list")), "demo data only", status_code=403)
 
     def test_password_reset_keeps_approval_and_ends_other_sessions(self):
         employee = real_employee("worker@example.com", approval_status=Employee.Approval.PENDING)

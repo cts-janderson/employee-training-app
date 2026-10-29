@@ -24,7 +24,7 @@ class RenewalTests(TestCase):
         self.admin = Employee.objects.create(name="Admin", email="admin@example.test",
                                              role=Employee.Role.ADMINISTRATOR, is_demo=True)
         self.employee = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
-        self.training = Training.objects.create(renewal_interval_months=1)
+        self.training = Training.objects.create(is_demo=True, renewal_interval_months=1)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         Slide.objects.create(version=self.version, position=1, header="Read", body="Read")
         self.version.status = TrainingVersion.Status.PUBLISHED
@@ -95,7 +95,7 @@ class RenewalTests(TestCase):
         with self.assertRaisesMessage(AssignmentInputError, "Choose a valid due date."):
             create_assignments(operation_id=uuid.uuid4(), actor=self.admin, version_id=self.version.id,
                                recipients=missing, due_date_value="bad")
-        other = Training.objects.create()
+        other = Training.objects.create(is_demo=True)
         unpublished = TrainingVersion.objects.create(training=other, version_number=1, title="Draft")
         with self.assertRaisesMessage(AssignmentInputError, "Choose a valid employee group."):
             create_assignments(operation_id=uuid.uuid4(), actor=self.admin, version_id=unpublished.id,
@@ -230,7 +230,7 @@ class ConcurrentRenewalTests(TransactionTestCase):
         self.admin = Employee.objects.create(name="Admin", email="admin@example.test",
                                              role=Employee.Role.ADMINISTRATOR, is_demo=True)
         self.employee = Employee.objects.create(name="Alice", email="alice@example.test", is_demo=True)
-        self.training = Training.objects.create(renewal_interval_months=1)
+        self.training = Training.objects.create(is_demo=True, renewal_interval_months=1)
         self.version = TrainingVersion.objects.create(training=self.training, version_number=1, title="Safety")
         Slide.objects.create(version=self.version, position=1, header="Read", body="Read")
         self.version.status = TrainingVersion.Status.PUBLISHED

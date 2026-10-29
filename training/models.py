@@ -6,6 +6,7 @@ from django.db import models
 from django.db.models import Case, CharField, F, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 
 class Employee(AbstractBaseUser):
@@ -32,6 +33,8 @@ class Employee(AbstractBaseUser):
                                             related_name="approval_decisions")
     # Bumped whenever a verification, setup or reset link is sent, so earlier links stop working.
     link_generation = models.PositiveIntegerField(default=0)
+    # Bumped on deactivation, so sessions from before it stay dead after reactivation.
+    session_version = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Email uniqueness is the case-insensitive constraint below; see ADR-0009.
@@ -51,6 +54,12 @@ class Employee(AbstractBaseUser):
     @property
     def email_is_verified(self):
         return bool(self.verified_email) and self.verified_email.lower() == self.email.lower()
+
+    def _get_session_auth_hash(self, secret=None):
+        # Covers the current and fallback hashes, which Django derives from this method.
+        key_salt = "django.contrib.auth.models.AbstractBaseUser.get_session_auth_hash"
+        return salted_hmac(key_salt, f"{self.password}:{self.session_version}",
+                           secret=secret, algorithm="sha256").hexdigest()
 
     def __str__(self):
         return self.name
@@ -78,6 +87,8 @@ class Training(models.Model):
     objects = TrainingQuerySet.as_manager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     renewal_interval_months = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Demo and real administrators keep separate libraries; see docs/plans/31-real-employee-workflows.md.
+    is_demo = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -202,6 +213,8 @@ class Quiz(VersionContent):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     version = models.OneToOneField(TrainingVersion, on_delete=models.PROTECT, related_name="quiz", null=True, blank=True)
     title = models.CharField(max_length=200, blank=True)
+    # Scopes library quizzes (no version) to demo or real administrators.
+    is_demo = models.BooleanField(default=False)
     revision = models.PositiveIntegerField(default=0)
     passing_percent = models.PositiveSmallIntegerField(null=True, blank=True)
 
@@ -550,10 +563,11 @@ class AssignmentOperation(models.Model):
 class EmployeeGroup(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
+    is_demo = models.BooleanField(default=False)
     created_at = models.DateTimeField()
 
     class Meta:
-        constraints = [models.UniqueConstraint(Lower("name"), name="employee_group_name_ci_unique")]
+        constraints = [models.UniqueConstraint(Lower("name"), "is_demo", name="employee_group_name_ci_unique")]
 
 
 class EmployeeGroupMembership(models.Model):

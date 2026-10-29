@@ -20,7 +20,7 @@ class LibraryQuizTests(TestCase):
             name="Administrator", email="demo.admin@example.test",
             role=Employee.Role.ADMINISTRATOR, is_demo=True,
         )
-        self.source = Quiz.objects.create(title="Safety check", passing_percent=80)
+        self.source = Quiz.objects.create(is_demo=True, title="Safety check", passing_percent=80)
         self.question = Question.objects.create(
             quiz=self.source, position=1, type=Question.Type.SINGLE_CHOICE, prompt="What is safe?",
         )
@@ -30,7 +30,7 @@ class LibraryQuizTests(TestCase):
         QuestionOption.objects.create(question=self.question, position=2, text="Ignore it")
 
     def draft(self):
-        training = Training.objects.create()
+        training = Training.objects.create(is_demo=True)
         version = TrainingVersion.objects.create(training=training, version_number=1, title="Safety")
         Slide.objects.create(version=version, position=1, header="Read", body="Report incidents")
         return version
