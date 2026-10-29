@@ -47,16 +47,22 @@ def _client(request):
     remote = request.META.get("REMOTE_ADDR", "")
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
     try:
-        trusted = any(ip_address(remote) in network for network in settings.TRUSTED_PROXY_NETWORKS)
+        peer = _address(remote)
     except ValueError:
         return remote
-    if not trusted or not forwarded:
-        return remote
+    if not forwarded or not any(peer in network for network in settings.TRUSTED_PROXY_NETWORKS):
+        return str(peer)
     try:
         # The proxy appends the address it saw, so earlier entries may be forged by the client.
-        return str(ip_address(forwarded.split(",")[-1].strip()))
+        return str(_address(forwarded.split(",")[-1].strip()))
     except ValueError:
-        return remote
+        return str(peer)
+
+
+def _address(value):
+    """Parse an address, reading an IPv4-mapped IPv6 address as IPv4 so one client has one key."""
+    address = ip_address(value)
+    return getattr(address, "ipv4_mapped", None) or address
 
 
 def _message(request, title, message, *, status=200, link=None, link_text=""):

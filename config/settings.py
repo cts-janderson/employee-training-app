@@ -121,14 +121,18 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "filters": {"redact_account_links": {"()": "config.logging.RedactAccountLinks"}},
-    "handlers": {"console": {"class": "logging.StreamHandler", "filters": ["redact_account_links"]}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "filters": ["redact_account_links"]},
+        # Unredacted, for the local account links that stand in for email while the stub is on.
+        "local_links": {"class": "logging.StreamHandler"},
+    },
     "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
     "loggers": {
         # Django's own handlers would also print request lines unfiltered.
         "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "django.server": {"handlers": ["console"], "level": "INFO", "propagate": False},
         # Local account links go to the server log because the in-memory email sink can't be read.
-        "training.accounts": {"handlers": ["console"], "level": "INFO" if DEV_AUTH_STUB else "WARNING",
-                              "propagate": False},
+        "training.accounts": {"handlers": ["local_links" if DEV_AUTH_STUB else "console"],
+                              "level": "INFO" if DEV_AUTH_STUB else "WARNING", "propagate": False},
     },
 }

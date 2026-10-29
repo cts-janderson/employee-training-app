@@ -5,7 +5,9 @@ import sys
 from ipaddress import ip_network
 from pathlib import Path
 
+from django.conf import settings
 from django.core import mail
+from django.core.checks import run_checks
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 
 from config.logging import RedactAccountLinks, redact_account_links
@@ -40,6 +42,11 @@ class ProductionSettingsTests(SimpleTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("APP_BASE_URL must use https", result.stderr)
 
+    def test_documented_build_placeholders_load(self):
+        result = load_settings(DJANGO_SECRET_KEY="build", DJANGO_ALLOWED_HOSTS="build",
+                               APP_BASE_URL="https://build.invalid", DATABASE_URL="postgresql://build/unused")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_production_requires_explicit_allowed_hosts(self):
         result = load_settings(DJANGO_ALLOWED_HOSTS=None)
         self.assertNotEqual(result.returncode, 0)
@@ -66,9 +73,17 @@ class ClientAddressTests(SimpleTestCase):
         self.assertEqual(self.client_for("172.18.0.5", ""), "172.18.0.5")
         self.assertEqual(self.client_for("172.18.0.5"), "172.18.0.5")
 
+    def test_ipv4_mapped_addresses_count_as_ipv4(self):
+        self.assertEqual(self.client_for("::ffff:172.18.0.5", "::ffff:203.0.113.9"), "203.0.113.9")
+        self.assertEqual(self.client_for("::ffff:198.51.100.7"), "198.51.100.7")
+
     @override_settings(TRUSTED_PROXY_NETWORKS=[])
     def test_without_trusted_proxies_the_header_is_ignored(self):
         self.assertEqual(self.client_for("172.18.0.5", "203.0.113.9"), "172.18.0.5")
+
+    @override_settings(TRUSTED_PROXY_NETWORKS=[])
+    def test_deployment_check_warns_without_trusted_proxies(self):
+        self.assertIn("training.W001", [message.id for message in run_checks(include_deployment_checks=True)])
 
 
 class RedactionTests(SimpleTestCase):
@@ -80,6 +95,21 @@ class RedactionTests(SimpleTestCase):
         RedactAccountLinks().filter(record)
         self.assertNotIn("tok-en", record.getMessage())
         self.assertEqual(redact_account_links("GET /account/sign-in/"), "GET /account/sign-in/")
+
+    def test_tracebacks_are_redacted_too(self):
+        try:
+            raise ValueError("failed for /account/setup/MTIz/tok-en/")
+        except ValueError:
+            import sys
+            record = logging.LogRecord("django.request", logging.ERROR, "", 0, "boom", (), sys.exc_info())
+        RedactAccountLinks().filter(record)
+        self.assertNotIn("tok-en", record.exc_text)
+
+    def test_local_account_links_stay_readable_while_the_stub_is_on(self):
+        # The printed link stands in for email locally, so the stub's logger skips redaction.
+        self.assertTrue(settings.DEV_AUTH_STUB)
+        self.assertEqual(settings.LOGGING["loggers"]["training.accounts"]["handlers"], ["local_links"])
+        self.assertNotIn("filters", settings.LOGGING["handlers"]["local_links"])
 
 
 class PlainTextEmailTests(TestCase):
