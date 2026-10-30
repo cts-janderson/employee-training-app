@@ -178,6 +178,12 @@ Gunicorn's access-log redaction comes with step E. Other open items, also for st
 - **Proxy header handling:** Caddy must replace any `X-Forwarded-For` header the client sends.
 - **Network isolation:** `web` must be reachable only through Caddy. Both the forwarded-address and the forwarded-protocol header depend on this.
 
+**Step E, implemented October 30, 2026,** as step 1 of [plan 36](36-current-task.md#step-1-notes):
+
+- Gunicorn's logs redact account links.
+- Caddy replaces `X-Forwarded-For`.
+- `web` is reachable only through the proxy.
+
 ## Order
 
 The steps run in order, each as its own PR: A → B → C → D → E → F → G. A synthetic-data smoke deployment can follow E even before A merges, as long as no real employees are invited.

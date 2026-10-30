@@ -3,13 +3,22 @@ import os
 import subprocess
 import sys
 from ipaddress import ip_network
+from datetime import timedelta
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from django.conf import settings
+from django.contrib.sessions.models import Session
 from django.core import mail
 from django.core.checks import run_checks
+from django.core.management import call_command
+from django.db import OperationalError
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
+from gunicorn.config import Config
 
+from config.gunicorn_logging import RedactingLogger
 from config.logging import RedactAccountLinks, redact_account_links
 
 from .sign_in_protection import client_address
@@ -126,6 +135,39 @@ class RedactionTests(SimpleTestCase):
         self.assertTrue(settings.DEV_AUTH_STUB)
         self.assertEqual(settings.LOGGING["loggers"]["training.accounts"]["handlers"], ["local_links"])
         self.assertNotIn("filters", settings.LOGGING["handlers"]["local_links"])
+
+
+    def test_gunicorn_access_and_error_logs_redact_account_links(self):
+        logger = RedactingLogger(Config())
+        with self.assertLogs("gunicorn.access", level="INFO") as access:
+            logger.access_log.info('"%(r)s" %(s)s', {"r": "GET /account/setup/MTIz/tok-en/ HTTP/1.1", "s": 200})
+        with self.assertLogs("gunicorn.error", level="ERROR") as error:
+            logger.error_log.error("Error handling /account/reset/MTIz/tok-en/")
+        self.assertEqual(access.records[0].getMessage(), '"GET /account/setup/[redacted]/ HTTP/1.1" 200')
+        self.assertNotIn("tok-en", error.records[0].getMessage())
+
+
+class HealthTests(TestCase):
+    def test_health_reports_ok_when_the_database_answers(self):
+        response = self.client.get("/health/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_health_reports_unavailable_when_the_database_does_not_answer(self):
+        with patch("training.views.connection.cursor", side_effect=OperationalError("down")), \
+                self.assertLogs("training.views", level="WARNING"):
+            response = self.client.get("/health/")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"status": "unavailable"})
+
+
+class CleanupSessionTests(TestCase):
+    def test_cleanup_removes_expired_sessions_and_keeps_current_ones(self):
+        now = timezone.now()
+        Session.objects.create(session_key="expired", session_data="", expire_date=now - timedelta(minutes=1))
+        Session.objects.create(session_key="current", session_data="", expire_date=now + timedelta(hours=1))
+        call_command("cleanup_training_imports", stdout=StringIO())
+        self.assertEqual(list(Session.objects.values_list("session_key", flat=True)), ["current"])
 
 
 class PlainTextEmailTests(TestCase):

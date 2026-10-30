@@ -1,7 +1,9 @@
+import logging
 import uuid
 from urllib.parse import urlencode
 
 from django.http import Http404, HttpResponseBadRequest, JsonResponse
+from django.db import DatabaseError, connection
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
@@ -29,6 +31,7 @@ from .services import (
 )
 from .quiz_views import editable_version
 
+logger = logging.getLogger(__name__)
 
 @require_GET
 @actor_required
@@ -40,6 +43,13 @@ def home(request):
 
 @require_GET
 def health(request):
+    # The container health check and the proxy rely on this; a 503 means the database can't be reached.
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except DatabaseError:
+        logger.warning("Health check could not reach the database", exc_info=True)
+        return JsonResponse({"status": "unavailable"}, status=503)
     return JsonResponse({"status": "ok"})
 
 

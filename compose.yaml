@@ -1,0 +1,139 @@
+# Production stack (docs/plans/30-production-deployment.md, step E). Always run with the environment file:
+#   docker compose --env-file .env.production up -d --build
+name: employee-training
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app-environment: &app-environment
+  DJANGO_DEBUG: "0"
+  DEV_AUTH_STUB: "0"
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY}
+  DJANGO_ALLOWED_HOSTS: ${APP_HOST:?set APP_HOST}
+  APP_BASE_URL: https://${APP_HOST}
+  # Only the proxy, at its fixed address on the edge network, may name the client in X-Forwarded-For.
+  TRUSTED_PROXY_NETWORKS: 172.30.0.10/32
+  DATABASE_URL: postgresql://training_app:${TRAINING_APP_DB_PASSWORD:?set TRAINING_APP_DB_PASSWORD}@db:5432/${POSTGRES_DB:-training}
+  ORG_TIME_ZONE: ${ORG_TIME_ZONE:-America/New_York}
+  NOTIFICATION_FROM_EMAIL: ${NOTIFICATION_FROM_EMAIL:?set NOTIFICATION_FROM_EMAIL}
+  GRAPH_TENANT_ID: ${GRAPH_TENANT_ID:?set GRAPH_TENANT_ID}
+  GRAPH_CLIENT_ID: ${GRAPH_CLIENT_ID:?set GRAPH_CLIENT_ID}
+  GRAPH_CLIENT_SECRET: ${GRAPH_CLIENT_SECRET:?set GRAPH_CLIENT_SECRET}
+  MAIL_TIMEOUT_SECONDS: ${MAIL_TIMEOUT_SECONDS:-15}
+  SECURE_HSTS_SECONDS: ${SECURE_HSTS_SECONDS:-3600}
+  SESSION_COOKIE_AGE: ${SESSION_COOKIE_AGE:-43200}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-app: &app
+  build: .
+  image: employee-training-app:${APP_IMAGE_TAG:-latest}
+  init: true
+  restart: unless-stopped
+  logging: *logging
+  environment: *app-environment
+  networks: [internal]
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  proxy:
+    build: docker/caddy
+    image: employee-training-proxy:${APP_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_HOST: ${APP_HOST}
+      TLS_MODE: ${TLS_MODE:-cloudflare}
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+        ipv4_address: 172.30.0.10
+
+  web:
+    <<: *app
+    command: ["web"]
+    environment:
+      <<: *app-environment
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-3}
+    # Reachable only through the proxy: no published ports, and the edge network is shared with the proxy alone.
+    networks: [edge, internal]
+    healthcheck:
+      test: ["CMD", "entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    # Long enough to finish one Graph send (MAIL_TIMEOUT_SECONDS) and a token refresh after SIGTERM.
+    stop_grace_period: 60s
+    # The egress network reaches Microsoft Graph; internal is cut off from the internet.
+    networks: [egress, internal]
+
+  cleanup:
+    <<: *app
+    command: ["cleanup"]
+
+  migrate:
+    <<: *app
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      <<: *app-environment
+      DATABASE_URL: postgresql://training_owner:${TRAINING_OWNER_DB_PASSWORD:?set TRAINING_OWNER_DB_PASSWORD}@db:5432/${POSTGRES_DB:-training}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      # The superuser only provisions roles; the application never uses it.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-training}
+      TRAINING_OWNER_DB_PASSWORD: ${TRAINING_OWNER_DB_PASSWORD}
+      TRAINING_APP_DB_PASSWORD: ${TRAINING_APP_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres:/provision:ro
+      - ./docker/postgres/provision-roles.sh:/docker-entrypoint-initdb.d/10-provision-roles.sh:ro
+    networks: [internal]
+    healthcheck:
+      # Over TCP: during first-time initialization the server listens on its socket only, so this waits for
+      # the roles to be provisioned.
+      test: ["CMD-SHELL", "pg_isready --host 127.0.0.1 --username postgres --dbname \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  egress: {}
+  internal:
+    internal: true
+
+volumes:
+  pgdata: {}
+  caddy_data: {}
+  caddy_config: {}
+  backups: {}

@@ -1,0 +1,21 @@
+# TLS_MODE=cloudflare (the default) gets a public certificate through a Cloudflare DNS-01 challenge.
+# TLS_MODE=internal uses Caddy's own CA, for a local stack only.
+(tls_cloudflare) {
+	tls {
+		dns cloudflare {$CF_API_TOKEN}
+	}
+}
+
+(tls_internal) {
+	tls internal
+}
+
+{$APP_HOST} {
+	import tls_{$TLS_MODE:cloudflare}
+
+	reverse_proxy web:8000 {
+		# Replace anything the client sent: the app trusts the last entry because only this proxy reaches it.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto https
+	}
+}
