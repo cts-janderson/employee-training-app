@@ -18,6 +18,7 @@ With a local PostgreSQL database and environment configured as in [README.md](RE
 - `.venv/bin/python manage.py migrate` applies database migrations.
 - `.venv/bin/python manage.py bootstrap_demo_admin` creates the synthetic local administrator when debug and the stub are enabled.
 - `.venv/bin/python manage.py create_administrator --name ... --email ...` creates the first real (password) administrator; see [sign-in skeleton](docs/plans/29-sign-in-skeleton.md).
+- `.venv/bin/python manage.py unblock_address <network>` lifts an address block (`--list` shows open blocks), and `remove_passkeys --email ...` removes a lost administrator passkey; see [plan 33](docs/plans/33-sign-in-attack-protection.md).
 - `.venv/bin/python manage.py check` checks Django configuration.
 - `.venv/bin/python manage.py runserver` starts the local server.
 - `.venv/bin/python manage.py dispatch_notifications --loop` runs the notification worker separately: the local sink with the demo stub, or Microsoft Graph when it's configured ([ADR-0011](docs/adr/0011-email-through-microsoft-graph.md)).
@@ -25,7 +26,7 @@ With a local PostgreSQL database and environment configured as in [README.md](RE
 - `npm ci`, `npm run build:editor`, and `npm test` install editor dependencies, rebuild the checked-in document editor bundle, and run the JavaScript tests in `training/js_tests/`. See [document authoring](docs/local-development.md#document-authoring).
 - `.venv/bin/python manage.py collectstatic --noinput` builds static assets.
 
-Use the loopback-only demo actor switcher and local email sink for core-workflow development while identity and external delivery are deferred. Apply migrations through Slice 8 before running notifications, through `0015` before using text import or document authoring, through `0016` before using email and password sign-in, and through `0017` before real administrators use the administrator pages (each population keeps its own library; see [Slice 31](docs/plans/31-real-employee-workflows.md)), through `0018` before sending email or running the notification worker, and through `0019` before signing in, registering or requesting account emails. Record deployment, authentication, PostgreSQL migration and concurrency, and worker proof before internal rollout or introducing real employee data.
+Use the loopback-only demo actor switcher and local email sink for core-workflow development while identity and external delivery are deferred. Apply migrations through Slice 8 before running notifications, through `0015` before using text import or document authoring, through `0016` before using email and password sign-in, and through `0017` before real administrators use the administrator pages (each population keeps its own library; see [Slice 31](docs/plans/31-real-employee-workflows.md)), through `0018` before sending email or running the notification worker, and through `0019` before signing in, registering or requesting account emails, and through `0020` before signing in with address blocks, trusted devices and passkeys ([plan 33](docs/plans/33-sign-in-attack-protection.md)). Record deployment, authentication, PostgreSQL migration and concurrency, and worker proof before internal rollout or introducing real employee data.
 
 ## Coding Style & Naming Conventions
 

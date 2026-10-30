@@ -4,6 +4,7 @@ from io import StringIO
 from unittest import mock, skipUnless
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import close_old_connections, connection, connections
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
@@ -188,6 +189,27 @@ class SignInProtectionTests(TestCase):
         self.assertIn("Lifted the block on 198.51.100.1/32", out.getvalue())
         self.assertEqual(AddressBlock.objects.get().end_reason, AddressBlock.EndReason.COMMAND)
         self.assertTrue(SecurityEvent.objects.filter(kind=SecurityEvent.Kind.BLOCK_COMMAND).exists())
+
+    @override_settings(ACCOUNT_RATE_LIMITS=limits(address_failures=1))
+    def test_bad_block_input_is_refused_cleanly(self):
+        for _ in range(2):
+            record_failure("198.51.100.1/32")
+        admin = self.browser()
+        self.sign_in("admin@example.com", client=admin)
+        for data in ({"action": "permanent", "block_id": "not-a-number"}, {"action": "lift", "network": "garbage"}):
+            with self.subTest(data):
+                self.assertContains(admin.post(reverse("address_blocks"), data), "already ended")
+        self.assertIsNotNone(active_block("198.51.100.1/32"))
+        with self.assertRaisesMessage(CommandError, "Not an IP address or network"):
+            call_command("unblock_address", "garbage", stdout=StringIO())
+
+    @override_settings(ACCOUNT_RATE_LIMITS=limits(address_failures=1))
+    def test_an_expired_block_cant_be_made_permanent(self):
+        now = timezone.now()
+        for _ in range(2):
+            record_failure("198.51.100.1/32", now=now)
+        block = AddressBlock.objects.get()
+        self.assertIsNone(make_permanent(block.pk, actor=self.admin, now=now + timedelta(days=2)))
 
     # Reset email cap per email
 

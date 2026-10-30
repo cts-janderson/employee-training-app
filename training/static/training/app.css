@@ -169,6 +169,8 @@ main { width: min(100%, 84rem); }
 .record-role { color: #526173; font-size: .86rem; }
 .record-separator { color: #9ba6b1; font-weight: 400; }
 .employee-row { grid-template-columns: 2.6rem minmax(12rem, 1fr) minmax(7rem, .45fr) minmax(6rem, .35fr) auto; }
+.security-row { grid-template-columns: minmax(0, 1fr) auto; }
+.security-row input { width: 12rem; }
 .employee-form { margin: 0; padding: 1.35rem 1.5rem 1.5rem; }
 .employee-form h2, .log-filter h2, .assignment-filters h2 { margin: 0 0 .8rem; font-size: 1.12rem; }
 .employee-form-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto; gap: .9rem; align-items: end; }
@@ -593,6 +595,8 @@ main { container: page / inline-size; }
 /* Employee and assignment rows need a simpler layout below 50rem. */
 @container records (max-width: 50rem) {
   .employee-row { grid-template-columns: 2.6rem minmax(0, 1fr); gap: .6rem .85rem; }
+  .security-row { grid-template-columns: minmax(0, 1fr); }
+  .security-row input { width: 100%; }
   .employee-row .record-role, .employee-row .record-status, .employee-row > .text-action { grid-column: 2; }
   .assignment-results-header { display: none; }
   .assignment-results .assignment-row { grid-template-columns: minmax(0, 1fr) minmax(9rem, auto); gap: .8rem; }

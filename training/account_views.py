@@ -20,6 +20,7 @@ from .accounts import (
     awaiting_setup,
     decide_application,
     invite_employee,
+    is_account_administrator,
     limit_reached,
     mark_verified,
     normalize_email,
@@ -43,6 +44,7 @@ from .sign_in_protection import (
     client_network,
     lift_block,
     make_permanent,
+    normalize_network,
     record_failure,
     set_trusted_device,
     trusted_device,
@@ -63,7 +65,8 @@ def _too_many(request):
 
 def _blocked(request):
     return _message(request, "Sign-in blocked",
-                    "Sign-in from your network is blocked. Contact an administrator.", status=403)
+                    "Sign-in from your network is blocked. Contact an administrator.", status=403,
+                    link=reverse("sign_in"), link_text="Administrators: sign in with a passkey")
 
 
 class SignInView(auth_views.LoginView):
@@ -160,7 +163,7 @@ def verify_email_view(request, uidb64, token):
 def account_status(request):
     employee = request.user
     request.employee = employee
-    notice = ""
+    notice = request.session.pop("passkey_notice", "")
     if request.method == "POST" and request.POST.get("action") == "resend_verification":
         if rate_limited("account_email", f"verify:{employee.pk}"):
             return _too_many(request)
@@ -168,6 +171,7 @@ def account_status(request):
         notice = "We've sent a new confirmation link."
     return render(request, "training/account_status.html", {
         "state": account_state(employee), "states": AccountState, "notice": notice,
+        "passkeys": employee.passkeys.order_by("created_at") if is_account_administrator(employee) else None,
     })
 
 
@@ -305,7 +309,11 @@ def address_blocks(request):
     notice = ""
     if request.method == "POST":
         action = request.POST.get("action")
-        if action == "lift" and lift_block(request.POST.get("network", ""), actor=request.employee):
+        try:
+            network = normalize_network(request.POST.get("network", ""))
+        except ValueError:
+            network = None
+        if action == "lift" and network and lift_block(network, actor=request.employee):
             notice = "Block lifted."
         elif action == "permanent" and make_permanent(request.POST.get("block_id"), actor=request.employee):
             notice = "Block made permanent."

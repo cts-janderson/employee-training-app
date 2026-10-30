@@ -1,4 +1,5 @@
 {% extends "training/base.html" %}
+{% load static %}
 {% block title %}Your account · Employee Training{% endblock %}
 {% block content %}
   <h1>Your account</h1>
@@ -16,5 +17,35 @@
       <p>Your account is active. <a href="{% url 'home' %}">Go to your training</a></p>
     {% endif %}
   </div>
+  {% if passkeys is not None %}
+    <div class="section-heading"><h2>Passkeys</h2><span class="section-count">{{ passkeys|length }}</span></div>
+    <p class="muted">A passkey lets you sign in with your device's PIN or biometric check, even when your network is blocked after too many wrong passwords.</p>
+    {% if passkeys|length == 1 %}<p class="badge amber" role="note">Add a second passkey in case you lose this device.</p>{% endif %}
+    <div class="collection-panel">
+    {% for passkey in passkeys %}
+      <article class="collection-row security-row">
+        <div class="record-main"><h3>{{ passkey.name }}</h3><p class="record-subtitle">Added {{ passkey.created_at|date:"M j, Y" }}{% if passkey.last_used_at %} · last used {{ passkey.last_used_at|date:"M j, Y" }}{% endif %}</p></div>
+        <form method="post" action="{% url 'passkey_remove' passkey.id %}" class="actions">
+          {% csrf_token %}
+          <label class="visually-hidden" for="remove-password-{{ passkey.id }}">Your password</label>
+          <input id="remove-password-{{ passkey.id }}" name="password" type="password" autocomplete="current-password" placeholder="Your password" required>
+          <button type="submit" class="secondary">Remove</button>
+        </form>
+      </article>
+    {% empty %}
+      <p class="empty-state">You have no passkeys.</p>
+    {% endfor %}
+    </div>
+    <form class="card stack" data-passkey-register data-options-url="{% url 'passkey_register_options' %}" data-verify-url="{% url 'passkey_register_verify' %}" hidden>
+      {% csrf_token %}
+      <h3>Add a passkey</h3>
+      <div><label for="passkey-name">Name</label><input id="passkey-name" name="name" maxlength="100" placeholder="Office laptop" required></div>
+      <div><label for="passkey-password">Your password</label><input id="passkey-password" name="password" type="password" autocomplete="current-password" required></div>
+      <p class="error" role="alert" data-passkey-error hidden></p>
+      <div><button type="submit">Add passkey</button></div>
+    </form>
+    <noscript><p>Adding a passkey needs JavaScript.</p></noscript>
+  {% endif %}
   <p><a href="{% url 'password_change' %}">Change password</a></p>
+  {% if passkeys is not None %}<script src="{% static 'training/passkeys.js' %}" defer></script>{% endif %}
 {% endblock %}

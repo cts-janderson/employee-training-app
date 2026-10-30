@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import assignment_admin_views, assignment_views, employee_views, group_views, library_quiz_views, notification_views, quiz_learner_views, quiz_views, views
-from . import account_views, report_views, import_views, document_views
+from . import account_views, report_views, import_views, document_views, passkey_views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -18,6 +18,11 @@ urlpatterns = [
     path("account/setup/<uidb64>/<token>/", account_views.AccountSetup.as_view(), name="account_setup"),
     path("accounts/", account_views.account_admin, name="account_admin"),
     path("accounts/blocks/", account_views.address_blocks, name="address_blocks"),
+    path("account/passkeys/options/", passkey_views.register_options, name="passkey_register_options"),
+    path("account/passkeys/verify/", passkey_views.register_verify, name="passkey_register_verify"),
+    path("account/passkeys/<int:passkey_id>/remove/", passkey_views.remove, name="passkey_remove"),
+    path("account/sign-in/passkey/options/", passkey_views.sign_in_options, name="passkey_sign_in_options"),
+    path("account/sign-in/passkey/verify/", passkey_views.sign_in_verify, name="passkey_sign_in_verify"),
     path("trainings/", views.training_list, name="training_list"),
     path("trainings/new/", views.new_training, name="new_training"),
     path("trainings/create/", views.create_content, name="create_content"),

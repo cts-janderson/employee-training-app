@@ -64,10 +64,10 @@ def network_of(value):
 
 
 def normalize_network(value):
-    """Read an administrator's or command's network the way blocks store it."""
+    """Read an administrator's or command's network the way blocks store it. Raises ValueError otherwise."""
     value = value.strip()
     if "/" not in value:
-        return network_of(value)
+        return network_of(str(_address(value)))
     return str(ip_network(value, strict=False))
 
 
@@ -148,10 +148,11 @@ def record_failure(network, *, now=None):
 
 
 def _end_expired(network, now):
-    for block in AddressBlock.objects.filter(network=network, ended_at__isnull=True, expires_at__lte=now):
-        block.ended_at, block.end_reason = block.expires_at, AddressBlock.EndReason.EXPIRED
-        block.save(update_fields=["ended_at", "end_reason"])
-        record_event(SecurityEvent.Kind.BLOCK_EXPIRED, network=network, now=now)
+    expired = AddressBlock.objects.filter(network=network, ended_at__isnull=True, expires_at__lte=now)
+    for block in expired:
+        # Conditional, so a block made permanent meanwhile is never ended with a stale expiry.
+        if expired.filter(pk=block.pk).update(ended_at=block.expires_at, end_reason=AddressBlock.EndReason.EXPIRED):
+            record_event(SecurityEvent.Kind.BLOCK_EXPIRED, network=network, now=now)
 
 
 def lift_block(network, *, actor=None, now=None):
@@ -175,7 +176,15 @@ def lift_block(network, *, actor=None, now=None):
 def make_permanent(block_id, *, actor, now=None):
     """Stop an open block from expiring. Returns the block, or None when it has already ended."""
     now = now or timezone.now()
+    try:
+        network = AddressBlock.objects.filter(pk=block_id).values_list("network", flat=True).first()
+    except (ValueError, TypeError):
+        return None
+    if network is None:
+        return None
     with transaction.atomic():
+        # The same lock as creating, expiring and lifting, so none of them can interleave with this.
+        _lock(network)
         block = AddressBlock.objects.select_for_update().filter(_open(now), pk=block_id).first()
         if block is None:
             return None

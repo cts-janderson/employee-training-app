@@ -80,7 +80,8 @@ if not DEBUG and EMAIL_BACKEND != GRAPH_EMAIL_BACKEND:
     raise ImproperlyConfigured("EMAIL_BACKEND must be the Graph backend when DJANGO_DEBUG is off")
 if EMAIL_BACKEND == GRAPH_EMAIL_BACKEND and not all([GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET]):
     raise ImproperlyConfigured("GRAPH_TENANT_ID, GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET are required to send email")
-APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+# localhost, not 127.0.0.1, because WebAuthn refuses an IP address as the relying party.
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 if not DEBUG and not APP_BASE_URL.startswith("https://"):
     raise ImproperlyConfigured("APP_BASE_URL must use https when DJANGO_DEBUG is off")
 CSRF_TRUSTED_ORIGINS = [APP_BASE_URL] if APP_BASE_URL.startswith("https://") else []

@@ -149,3 +149,16 @@ Add **Trusted device**, **Address block** and **Passkey** to `docs/GLOSSARY.md`.
 ## Order
 
 A → F → B → C → E → D, each as a commit on the `sign-in-attack-protection` branch, in one PR after the step D PR merges. Migration `0020` adds `AddressBlock`, `SecurityEvent`, `Passkey`, `PasskeyChallenge` and `Employee.webauthn_user_handle`.
+
+## Status
+
+**Implemented October 30, 2026,** on the `sign-in-attack-protection` branch, in `training/sign_in_protection.py`, `training/passkeys.py`, `training/passkey_views.py`, `static/training/passkeys.js`, migration `0020`, and the `unblock_address` and `remove_passkeys` commands.
+
+- Networks are stored in CIDR form: `203.0.113.7/32` for IPv4, the `/64` for IPv6. `unblock_address` accepts a bare address.
+- `_client()` became `client_address()` in `training/sign_in_protection.py`.
+- The request whose failure creates a block gets the 403 page itself.
+- **Make permanent** takes the same network lock as creating, expiring and lifting a block. Ending an expired block is a conditional update, so it can't end a block that was made permanent meanwhile.
+- `cleanup_training_imports` also deletes expired passkey challenges.
+- The local default `APP_BASE_URL` is now `http://localhost:8000`, because WebAuthn refuses an IP address.
+- Tests: `training/test_sign_in_protection.py`, `training/test_passkeys.py` (a software authenticator signs real WebAuthn responses) and `training/js_tests/passkeys.test.cjs`. The full PostgreSQL suite passed: 421 tests, and 36 JavaScript tests.
+

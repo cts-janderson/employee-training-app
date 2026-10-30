@@ -21,7 +21,7 @@ If you use a different database name, user, host, or port, export a matching `DA
 ./scripts/start-local.sh
 ```
 
-The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, starts the import-review cleanup loop, and starts Django at <http://127.0.0.1:8000/>. The cleanup loop stops when the startup script exits. Visit `/health/` for a simple health response. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
+The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, starts the import-review cleanup loop, and starts Django at <http://localhost:8000/>. The cleanup loop stops when the startup script exits. Visit `/health/` for a simple health response. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
 
 You can run the steps separately when diagnosing startup:
 
@@ -48,6 +48,15 @@ Sign-in, registration, approval, invitations and password reset work locally wit
 
 2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`) and use the other administrator pages with real employees. Real and demo administrators don't see each other's employees, trainings, library quizzes or groups; see [Slice 31](plans/31-real-employee-workflows.md). Apply migration `0017` first. To work with demo data, sign out and use **Switch profile**.
 3. Register a second address at `/account/register/`, open the printed verify link, then approve the application from **Accounts**.
+
+4. Apply migration `0020` first. A network with more than 50 failed sign-ins in 24 hours gets an address block for 24 hours. Lift it on **Blocked addresses** (`/accounts/blocks/`, linked from **Accounts**) or from the shell. Networks are stored as `127.0.0.1/32`, or as the `/64` of an IPv6 client:
+
+   ```bash
+   .venv/bin/python manage.py unblock_address --list
+   .venv/bin/python manage.py unblock_address 127.0.0.1
+   ```
+
+5. To try passkeys, set `APP_BASE_URL=http://localhost:8000` and open the app at `localhost`, not `127.0.0.1`: WebAuthn refuses an IP address as the site. Add a passkey under **Your account** as a real administrator. In Chrome, DevTools → **WebAuthn** → **Enable virtual authenticator environment** gives a passkey without a physical device. `manage.py remove_passkeys --email …` removes an administrator's passkeys.
 
 Real accounts can't use the demo switcher, and demo profiles can't sign in with a password.
 

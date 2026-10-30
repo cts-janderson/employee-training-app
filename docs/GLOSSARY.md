@@ -124,6 +124,18 @@ _Avoid_: Separate administrator identity
 One of two separate sets of employees, with the trainings, library quizzes, groups and evidence that belong to them: the real organization, or synthetic demonstration data. An administrator works within exactly one population.
 _Avoid_: Environment, tenant, workspace, sandbox
 
+**Trusted device**:
+A browser that has signed in to an employee's account before, so repeated wrong passwords sent for that employee's email from elsewhere don't lock the employee out of it. Changing the password or deactivating the employee ends the trust.
+_Avoid_: Remembered session, known machine
+
+**Address block**:
+A period during which a network that sent many wrong passwords can't sign in, register or request a password reset. It ends on its own, or an administrator lifts it or makes it permanent.
+_Avoid_: Ban, lockout, IP block
+
+**Passkey**:
+A credential an administrator unlocks with a device's PIN or biometric check, which signs the administrator in even from a blocked network.
+_Avoid_: Security key, MAC address
+
 **Document**:
 A titled, continuous unit of learning content within a training; its acknowledgment is required for assignment completion.
 _Avoid_: Slide, attachment, page
