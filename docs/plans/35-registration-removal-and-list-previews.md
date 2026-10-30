@@ -28,6 +28,8 @@ Codex reviewed a first draft on October 30, 2026. Its corrections are folded in 
   - This serializes removal against a confirmation email being sent.
   - Confirming, approving and rejecting lock the same row, so removal serializes against them too.
   - A row deleted meanwhile is treated as already gone, not as an error.
+  - The lock key uses the canonical ID, so any spelling of the ID waits on the same lock.
+  - Sign-in locks the employee row, so a removal can't delete it halfway. A sign-in whose row is gone redirects back to sign-in.
 - **`remove_registration(*, actor, employee_id)`:**
   - Requires a real account administrator.
   - A registration confirmed or decided a moment earlier is refused with "This registration has already been confirmed."
@@ -49,7 +51,7 @@ Codex reviewed a first draft on October 30, 2026. Its corrections are folded in 
   - **Other emails:** reset, setup and existing-account emails don't touch the clock.
 - **`expire_registrations(*, now)`:**
   - Removes removable registrations whose `Coalesce(verification_sent_at, created_at)` is at least 7 days before `now`. The cutoff is tested with a controllable clock at exactly 7 days.
-  - Processes at most 100 rows per run.
+  - Takes at most 100 registrations per run. Registrations a security event refers to are left out of the candidates, so they can't fill every run and hold back newer expired ones.
   - Records `registration_expired` events with no actor and the same detail as manual removal.
   - `cleanup_training_imports` runs it each minute, next to `prune_rate_limits()`.
   - Setting: `UNCONFIRMED_REGISTRATION_DAYS = 7`.
@@ -156,4 +158,10 @@ None of these are domain terms, so the glossary is unchanged. "Registration" sta
 
 ## Status
 
-Planned October 30, 2026, and reviewed by Codex. Not started.
+Planned October 30, 2026, and reviewed by Codex.
+
+- **A** is committed in `1ee8fc0`, with review fixes in `fa95866`: sign-in locks the row, the lock key is canonical, and expiry leaves out registrations a security event refers to, taking at most 100 per run.
+- **B** is committed. **Accounts** shows previews through `_account_section.html`, and **All accounts** is `account_list`. Both render rows with `_account_row.html`. **Recent decisions** shows rows instead of plain text lines.
+  - Actions taken from **All accounts** report an error on that page through the session, rather than re-rendering **Accounts**, so the filter and page stay as they were.
+  - `safe_return_to()` now also requires HTTPS on secure requests, for every page that uses it.
+- **C** and **D** aren't started.

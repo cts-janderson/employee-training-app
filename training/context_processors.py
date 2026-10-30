@@ -8,6 +8,6 @@ def account_navigation(request):
     employee = getattr(request, "employee", None)
     # Only real administrators pay for these queries; the counts point them at work waiting on Accounts.
     if employee is not None and is_account_administrator(employee):
-        context["waiting_applications"] = len(pending_applications())
+        context["waiting_applications"] = pending_applications().count()
         context["open_blocks"] = open_block_count()
     return context

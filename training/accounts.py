@@ -330,9 +330,10 @@ def request_password_reset(email):
 
 
 def pending_applications():
-    return [employee for employee in Employee.objects.filter(
+    """Verified registrations waiting for a decision, longest-waiting first."""
+    return with_verification(Employee.objects.filter(
         is_demo=False, approval_status=Employee.Approval.PENDING,
-    ).exclude(verified_email="").order_by("created_at", "id") if employee.email_is_verified]
+    )).filter(VERIFIED).order_by("created_at", "id")
 
 
 def with_verification(queryset):
@@ -359,7 +360,13 @@ def awaiting_setup():
     return Employee.objects.filter(
         is_demo=False, approval_status=Employee.Approval.APPROVED, is_active=True,
         password__startswith=UNUSABLE_PASSWORD_PREFIX,
-    ).order_by("name", "id")
+    ).order_by("created_at", "id")
+
+
+def decided_accounts():
+    """Real employees with an approval decision, newest first. An invitation counts as an approval."""
+    return Employee.objects.filter(is_demo=False, approval_decided_at__isnull=False).select_related(
+        "approval_decided_by").order_by("-approval_decided_at", "-id")
 
 
 def _require_administrator(actor):

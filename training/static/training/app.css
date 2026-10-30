@@ -16,6 +16,7 @@ button.secondary, .button.secondary { color: #172b44; background: #fff; border-c
 button.secondary:hover, .button.secondary:hover { background: #eef1f5; border-color: #67798f; color: #12253d; }
 button.danger { background: #a9362e; border-color: #a9362e; }
 button.danger:hover { background: #822820; }
+.confirm-remove { margin: 0; }
 .confirm-remove > summary { list-style: none; }
 .confirm-remove > summary::-webkit-details-marker { display: none; }
 .confirm-remove[open] > summary { background: #eef1f5; }
@@ -357,6 +358,7 @@ th, td { border-bottom-color: #e5ebf3; }
 .chart-mode-nav a { display: inline-flex; align-items: center; min-height: 2.6rem; padding: .55rem .9rem; border-bottom: 2px solid transparent; color: var(--muted-ink); font-size: .9rem; font-weight: 700; text-decoration: none; }
 .chart-mode-nav a:hover { color: var(--brand-dark); background: var(--brand-soft); }
 .chart-mode-nav a[aria-current="page"] { border-bottom-color: var(--brand); color: var(--brand-dark); }
+.see-all { margin: .65rem 0 0; font-weight: 650; }
 .quiz-outcomes-data h3 { margin: 1.4rem 0 .6rem; font-size: 1.06rem; }
 .quiz-outcomes-data table { min-width: 50rem; }
 .quiz-outcomes-data .outcomes-group-row th { background: #f3f5f7; color: #1c2533; text-align: left; }

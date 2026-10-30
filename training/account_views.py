@@ -23,6 +23,7 @@ from .accounts import (
     account_state,
     awaiting_setup,
     awaiting_verification,
+    decided_accounts,
     decide_application,
     invite_employee,
     is_account_administrator,
@@ -44,6 +45,7 @@ from .accounts import (
     verification_tokens,
     verify_email,
 )
+from .browsing import browse, preview, safe_return_to
 from .dev_auth import (account_admin_required, admin_required, clear_real_session, demo_enabled,
                        demo_environment_required, mark_real_session)
 from .models import Employee
@@ -315,6 +317,11 @@ def account_admin(request):
                 error = AccountInputError("Choose an action.")
         except AccountInputError as exc:
             error = exc
+        if "return_to" in request.GET:
+            # Acting from All accounts: go back to the same filter, search and page, with any error.
+            if error:
+                request.session["account_error"] = str(error)
+            return redirect(safe_return_to(request, "account_list"))
         if not error:
             return redirect("account_admin")
     notice, notice_failed = _resend_notice(request)
@@ -340,13 +347,36 @@ def _resend_notice(request):
 
 def _admin_context(**extra):
     return {
-        "applications": pending_applications(),
-        "unconfirmed": awaiting_verification(),
-        "invited": awaiting_setup(),
-        "recent": Employee.objects.filter(is_demo=False, approval_decided_at__isnull=False)
-                  .select_related("approval_decided_by").order_by("-approval_decided_at")[:20],
+        "applications": preview(pending_applications(), "queue"),
+        "unconfirmed": preview(awaiting_verification(), "queue"),
+        "invited": preview(awaiting_setup(), "queue"),
+        "recent": preview(decided_accounts(), "log"),
         **extra,
     }
+
+
+# The All accounts filters: each is one section of Accounts, with its row actions.
+ACCOUNT_LISTS = {
+    "applications": ("Applications", pending_applications),
+    "unconfirmed": ("Waiting for email confirmation", awaiting_verification),
+    "setup": ("Waiting for setup", awaiting_setup),
+    "decided": ("Decisions", decided_accounts),
+}
+
+
+@account_admin_required
+def account_list(request):
+    status = request.GET.get("status")
+    if status not in ACCOUNT_LISTS:
+        status = "applications"
+    label, query = ACCOUNT_LISTS[status]
+    listing = browse(request, query(), search_fields=["name", "email"], extra_params={"status": status})
+    notice, notice_failed = _resend_notice(request)
+    return render(request, "training/account_list.html", {
+        "browse": listing, "status": status, "label": label, "browse_label": "accounts",
+        "statuses": [(key, name) for key, (name, _query) in ACCOUNT_LISTS.items()],
+        "notice": notice, "notice_failed": notice_failed, "error": request.session.pop("account_error", ""),
+    })
 
 
 @admin_required

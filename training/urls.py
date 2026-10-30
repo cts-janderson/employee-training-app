@@ -17,6 +17,7 @@ urlpatterns = [
     path("account/reset/<uidb64>/<token>/", account_views.PasswordResetConfirm.as_view(), name="password_reset_confirm"),
     path("account/setup/<uidb64>/<token>/", account_views.AccountSetup.as_view(), name="account_setup"),
     path("accounts/", account_views.account_admin, name="account_admin"),
+    path("accounts/all/", account_views.account_list, name="account_list"),
     path("accounts/blocks/", account_views.address_blocks, name="address_blocks"),
     path("accounts/demo/", account_views.demo_accounts, name="demo_accounts"),
     path("dev/outbox/", account_views.local_outbox, name="local_outbox"),
