@@ -15,8 +15,8 @@ Follows [plan 29](29-sign-in-skeleton.md) (applications and invitations) and [pl
 ### A. Sidebar for real administrators
 
 - Keep **Accounts** in the **Manage** group. Mark it current on `account_admin` and `address_blocks`.
-- Add a count badge to **Accounts** for applications waiting for a decision (`pending_applications()`), and a second count for open, unexpired address blocks. Hide each badge at zero. The badge text includes the noun for screen readers, for example `2 applications waiting`.
-- Add **Blocked addresses** as an indented link under **Accounts**, shown only while at least one block is open. The page stays linked from **Accounts** at all times.
+- Add a count badge to **Accounts** for applications waiting for a decision (`pending_applications()`). Show the open, unexpired block count on the **Blocked addresses** link instead. Hide each badge at zero. The badge text includes the noun for screen readers, for example `2 applications waiting`.
+- Add **Blocked addresses**, with its count, as an indented link under **Accounts**, shown only while at least one block is open. The page stays linked from **Accounts** at all times.
 - Compute the counts in one context processor, run only for real administrators, so other pages don't pay for the queries.
 
 ### B. Explain the split to demo administrators
@@ -30,7 +30,7 @@ Follows [plan 29](29-sign-in-skeleton.md) (applications and invitations) and [pl
 
 ### D. Local account outbox (debug and stub only)
 
-- New page `/dev/outbox/`, linked from the sidebar footer next to **Switch profile** while `demo_enabled` is true. It lists account emails (verify, setup, reset, existing-account notice) that this `runserver` process sent, newest first, with recipient, subject, time and the link.
+- New page `/dev/outbox/`, linked from the sidebar footer next to **Switch profile** while `demo_enabled` is true. It lists account emails (verify, setup, reset, existing-account notice) that this `runserver` process sent, newest first, with recipient, subject and the link.
 - It reads `django.core.mail.outbox` from the in-memory backend. The list empties when `runserver` restarts, and it doesn't show notification emails, because the notification worker is a separate process. The **Notifications** pages already show those records.
 - The view requires the stub and a loopback request, like the switcher, so it never runs with the Graph backend.
 

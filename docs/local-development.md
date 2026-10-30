@@ -38,7 +38,7 @@ Use the startup script for normal local use: it also sets `DJANGO_ALLOWED_HOSTS`
 
 ## Try email and password sign-in
 
-Sign-in, registration, approval, invitations and password reset work locally without an email provider ([Slice 29](plans/29-sign-in-skeleton.md)). Account emails go to Django's in-memory sink. With the demo stub enabled, each link is also printed in the `runserver` output as `Local verify link …`, `Local setup link …` or `Local reset link …`.
+Sign-in, registration, approval, invitations and password reset work locally without an email provider ([Slice 29](plans/29-sign-in-skeleton.md)). Account emails go to Django's in-memory sink. With the demo stub enabled, each link is listed on **Local outbox** (`/dev/outbox/`) and also printed in the `runserver` output as `Local verify link …`, `Local setup link …` or `Local reset link …`.
 
 1. Create the first real administrator. Until one exists, the sign-in page and a demo administrator's **Accounts** page show this command. Export `DATABASE_URL` and the other variables `scripts/start-local.sh` sets first. It prompts for a password of at least 12 characters and refuses once a real administrator exists:
 
@@ -46,7 +46,7 @@ Sign-in, registration, approval, invitations and password reset work locally wit
    .venv/bin/python manage.py create_administrator --name "Local Admin" --email admin@example.com
    ```
 
-2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`) and use the other administrator pages with real employees. Real and demo administrators don't see each other's employees, trainings, library quizzes or groups; see [Slice 31](plans/31-real-employee-workflows.md). Apply migration `0017` first. To work with demo data, sign out and use **Switch profile**.
+2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`) and use the other administrator pages with real employees. A demo administrator who opens **Accounts** gets a page (`/accounts/demo/`) explaining how to sign in instead. Real and demo administrators don't see each other's employees, trainings, library quizzes or groups; see [Slice 31](plans/31-real-employee-workflows.md). Apply migration `0017` first. To work with demo data, sign out and use **Switch profile**.
 3. Register a second address at `/account/register/`, open its verify link from **Local outbox** (`/dev/outbox/`, in the sidebar footer) or the `runserver` output, then approve the application from **Accounts**. Until it's confirmed, the registration is listed under **Waiting for email confirmation**, where **Resend link** sends a new one. The sidebar shows how many verified applications are waiting. The outbox lists account emails that this server process sent and empties when it restarts.
 
 4. Apply migration `0020` first. A network with more than 50 failed sign-ins in 24 hours gets an address block for 24 hours. Lift it on **Blocked addresses** (`/accounts/blocks/`, linked from **Accounts**, and from the sidebar while a block is open) or from the shell. Networks are stored as `127.0.0.1/32`, or as the `/64` of an IPv6 client:
