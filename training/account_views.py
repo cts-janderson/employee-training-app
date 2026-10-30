@@ -80,6 +80,9 @@ class SignInView(auth_views.LoginView):
     template_name = "training/sign_in.html"
     redirect_authenticated_user = True
 
+    def get_context_data(self, **kwargs):
+        return {**super().get_context_data(**kwargs), "first_run_hint": _first_run_hint()}
+
     def post(self, request, *args, **kwargs):
         self.network, email = client_network(request), normalize_email(request.POST.get("username"))
         if active_block(self.network):

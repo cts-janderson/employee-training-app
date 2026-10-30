@@ -98,3 +98,14 @@ class AccountWayfindingTests(TestCase):
         worker = Employee.objects.create(name="Demo worker", email="worker@example.test", is_demo=True)
         self.client.post(reverse("demo_switch"), {"employee_id": worker.pk})
         self.assertEqual(self.client.get(reverse("demo_accounts")).status_code, 403)
+
+    # Sign-in hint
+
+    def test_sign_in_shows_the_first_administrator_command_until_one_exists(self):
+        self.assertContains(self.client.get(reverse("sign_in")), "No administrator account exists yet")
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        self.assertNotContains(self.client.get(reverse("sign_in")), "No administrator account exists yet")
+
+    @override_settings(DEV_AUTH_STUB=False)
+    def test_sign_in_never_shows_the_command_without_the_stub(self):
+        self.assertNotContains(self.client.get(reverse("sign_in")), "No administrator account exists yet")
