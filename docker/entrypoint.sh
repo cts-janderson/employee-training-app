@@ -11,8 +11,9 @@ case "$role" in
     ;;
   web)
     # Account emails still go out in the request (until plan 36 step 4): a token request, a send, and one refresh
-    # and resend after a 401 can each take MAIL_TIMEOUT_SECONDS (15), so the timeout must outlast all four.
-    exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers "${WEB_CONCURRENCY:-3}" --timeout 75 \
+    # and resend after a 401. Each may wait MAIL_TIMEOUT_SECONDS (15) to connect and again for the answer, so the
+    # timeout covers all four at 30 seconds each. DNS lookups aren't bounded.
+    exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers "${WEB_CONCURRENCY:-3}" --timeout 120 \
       --worker-tmp-dir /dev/shm --access-logfile - --logger-class config.gunicorn_logging.RedactingLogger
     ;;
   worker)

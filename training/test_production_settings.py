@@ -123,9 +123,12 @@ class RedactionTests(SimpleTestCase):
 
     def test_percent_encoded_account_links_are_redacted(self):
         self.assertEqual(redact_account_links("GET /account/%76erify/MTIz/tok-en/ HTTP/1.1"),
-                         "GET /account/verify/[redacted]/ HTTP/1.1")
-        self.assertEqual(redact_account_links("GET /account/reset/MTIz%2Ftok-en/"), "GET /account/reset/[redacted]/")
+                         "GET /account/[redacted]/ HTTP/1.1")
+        self.assertEqual(redact_account_links("GET /account/reset/MTIz%2Ftok-en/"), "GET /account/[redacted]/")
         self.assertEqual(redact_account_links("GET /search/?q=a%20b"), "GET /search/?q=a%20b")
+        # Only the path is replaced; an encoded newline elsewhere stays encoded, so it can't forge a log line.
+        self.assertEqual(redact_account_links("GET /account/%76erify/MTIz/tok-en/?x=%0AFORGED HTTP/1.1"),
+                         "GET /account/[redacted]/?x=%0AFORGED HTTP/1.1")
 
     def test_tracebacks_are_redacted_too(self):
         try:

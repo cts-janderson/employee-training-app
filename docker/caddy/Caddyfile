@@ -3,7 +3,8 @@
 	# one names it in Referer, so neither may reach the log (the app's own logs redact them too).
 	log default {
 		format filter {
-			request>uri regexp "(/account/(?:verify|reset|setup)/)[^/?\s]+/[^/?\s]+/?" "${1}[redacted]/"
+			# Any path with a percent-escape is redacted too: Django routes /account/%76erify/... like /account/verify/.
+			request>uri regexp "^(?:(/account/(?:verify|reset|setup)/)[^?]*|[^?]*%[^?]*)" "${1}[redacted]/"
 			request>headers>Referer delete
 		}
 	}
