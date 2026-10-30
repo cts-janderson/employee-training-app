@@ -130,6 +130,10 @@ def active_block(network, *, now=None):
     return AddressBlock.objects.filter(_open(now or timezone.now()), network=network).first()
 
 
+def open_block_count(*, now=None):
+    return AddressBlock.objects.filter(_open(now or timezone.now())).count()
+
+
 def record_failure(network, *, now=None):
     """Count a failed sign-in for the network and block it once the day's failures pass the limit."""
     now = now or timezone.now()
