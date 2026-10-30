@@ -1,7 +1,7 @@
 {% extends "training/base.html" %}
 {% block title %}Accounts · Employee Training{% endblock %}
 {% block content %}
-  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Accounts</h1><p class="muted">Review applications and invite employees to sign in.</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Accounts</h1><p class="muted">Review applications and invite employees to sign in.</p></div><a class="button secondary" href="{% url 'address_blocks' %}">Blocked addresses</a></div>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   <form class="card employee-form" method="post">
     {% csrf_token %}

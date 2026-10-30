@@ -104,11 +104,17 @@ LOGIN_REDIRECT_URL = "home"
 # Verification, setup and reset links share this lifetime.
 PASSWORD_RESET_TIMEOUT = 24 * 60 * 60
 # (limit, window in seconds), counted in RateLimitCounter. Employees in one office can share an address,
-# so the per-address sign-in limit is generous.
+# so the per-address sign-in limit is generous. Sign-in failure scopes count only wrong passwords.
 ACCOUNT_RATE_LIMITS = {
     "sign_in": (5, 15 * 60), "sign_in_client": (100, 15 * 60), "sign_in_email": (20, 15 * 60),
-    "register": (5, 60 * 60), "account_email": (3, 60 * 60),
+    "sign_in_device": (10, 15 * 60), "trusted_email": (30, 15 * 60),
+    "address_failures": (50, 24 * 60 * 60),
+    "passkey_options": (300, 15 * 60), "passkey_failures": (10, 15 * 60), "reauthenticate": (5, 15 * 60),
+    "register": (5, 60 * 60), "account_email": (3, 60 * 60), "account_email_target": (10, 60 * 60),
 }
+# Address blocks and trusted devices; see docs/plans/33-sign-in-attack-protection.md.
+ADDRESS_BLOCK_HOURS = 24
+TRUSTED_DEVICE_DAYS = 90
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG

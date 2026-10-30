@@ -17,6 +17,7 @@ urlpatterns = [
     path("account/reset/<uidb64>/<token>/", account_views.PasswordResetConfirm.as_view(), name="password_reset_confirm"),
     path("account/setup/<uidb64>/<token>/", account_views.AccountSetup.as_view(), name="account_setup"),
     path("accounts/", account_views.account_admin, name="account_admin"),
+    path("accounts/blocks/", account_views.address_blocks, name="address_blocks"),
     path("trainings/", views.training_list, name="training_list"),
     path("trainings/new/", views.new_training, name="new_training"),
     path("trainings/create/", views.create_content, name="create_content"),

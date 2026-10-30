@@ -39,7 +39,7 @@ Codex reviewed a first draft on October 30, 2026. Its corrections are folded in 
 
 - New `AddressBlock` model: `network`, `failure_count`, `created_at`, `expires_at` (null when permanent), `ended_at`, `ended_by` (null for an expiry or a command), `end_reason` (`lifted`, `expired`, `command`), `made_permanent_at` and `made_permanent_by`. A unique constraint on `network` where `ended_at` is null allows one open block per network.
 - Each failed sign-in adds one to `address_failures` for the network: 50 per 24 hours. This happens inside a transaction that holds a PostgreSQL advisory lock for the network. When the count is over 50 and the network has no open, unexpired block, the request closes any expired block (`end_reason=expired`) and creates a new one that expires in 24 hours (`ADDRESS_BLOCK_HOURS`). Lifting a block takes the same lock, so lifting and creating can't interleave. A block missed after a crash is created by the next failure.
-- A network with an open, unexpired block gets a 403 page on sign-in, registration, password reset and verification resend: "Sign-in from your network is blocked. Contact an administrator." The page is the same for every email. Pages for a signed-in session aren't blocked, and neither is passkey sign-in.
+- A network with an open, unexpired block gets a 403 page on sign-in, registration and password reset: "Sign-in from your network is blocked. Contact an administrator." The page is the same for every email. Pages for a signed-in session, including the verification resend, aren't blocked, and neither is passkey sign-in.
 - **Blocked addresses** page (`/accounts/blocks/`, linked from **Accounts**, for real administrators):
   - Open blocks show the network, start time, expiry or "Permanent", and failure count, with **Lift block** and **Make permanent** buttons (POST with CSRF).
   - The 20 most recently ended blocks show who ended them and why.
@@ -112,7 +112,7 @@ The deployment guide (plan 30 step G) gets a recovery section. On the host:
 - **Address blocks:**
   - The 51st failure in a day, across several emails, creates one block. Parallel failures on PostgreSQL also create one block.
   - A block that wasn't created is created by the next failure.
-  - A blocked network gets 403 on sign-in, registration, reset and resend. Another network doesn't.
+  - A blocked network gets 403 on sign-in, registration and reset. Another network doesn't.
   - Blocks expire at 24 hours. Lifting a block clears that network's counters. A permanent block doesn't expire.
   - IPv6 addresses in one `/64` share a block, and IPv4-mapped addresses match their IPv4 block.
   - Only real administrators can use the page. `unblock_address` lifts a block and records an event.
