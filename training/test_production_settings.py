@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 from ipaddress import ip_network
 from datetime import timedelta
 from io import StringIO
@@ -129,6 +130,13 @@ class RedactionTests(SimpleTestCase):
         # Only the path is replaced; an encoded newline elsewhere stays encoded, so it can't forge a log line.
         self.assertEqual(redact_account_links("GET /account/%76erify/MTIz/tok-en/?x=%0AFORGED HTTP/1.1"),
                          "GET /account/[redacted]/?x=%0AFORGED HTTP/1.1")
+
+    def test_redaction_of_a_long_run_of_slashes_stays_fast(self):
+        # A header of slashes once made the encoded-path search rescan from every slash.
+        line = '"GET / HTTP/1.1" 200 "' + "/" * 16000 + '" "' + "/" * 16000 + '"'
+        started = time.perf_counter()
+        self.assertEqual(redact_account_links(line), line)
+        self.assertLess(time.perf_counter() - started, 0.05)
 
     def test_tracebacks_are_redacted_too(self):
         try:
