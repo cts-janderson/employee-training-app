@@ -1,3 +1,4 @@
+{% with employee=item %}
 <article class="collection-row employee-row">
   <span class="person-avatar" aria-hidden="true">{{ employee.name|first|upper|default:"?" }}</span>
   <div class="record-main"><h3>{{ employee.name }}</h3><p class="record-subtitle">{{ employee.email }}{% if row_kind == "decided" %} · {{ employee.get_approval_status_display|lower }}{% if employee.approval_decided_by %} by {{ employee.approval_decided_by.name }}{% endif %} {{ employee.approval_decided_at|date:"M j, Y" }}{% elif row_kind != "setup" %} · registered {{ employee.created_at|date:"M j, Y" }}{% endif %}</p></div>
@@ -24,3 +25,4 @@
     <form method="post" {% if action_url %}action="{{ action_url }}"{% endif %}>{% csrf_token %}<input type="hidden" name="employee_id" value="{{ employee.id }}"><button type="submit" name="action" value="resend_setup">Resend setup link</button></form>
   {% endif %}
 </article>
+{% endwith %}

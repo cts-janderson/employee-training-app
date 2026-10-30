@@ -12,7 +12,7 @@
   {% url 'account_admin' as admin_url %}
   {% with action_url=admin_url|add:"?"|add:browse.return_to_query row_kind=status %}
   <div class="collection-panel">
-  {% for employee in browse.page %}
+  {% for item in browse.page %}
     {% include "training/_account_row.html" %}
   {% empty %}
     <p class="empty-state">{% if browse.query %}No accounts match that search.{% else %}Nothing here.{% endif %}</p>

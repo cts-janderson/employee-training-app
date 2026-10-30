@@ -19,6 +19,7 @@ urlpatterns = [
     path("accounts/", account_views.account_admin, name="account_admin"),
     path("accounts/all/", account_views.account_list, name="account_list"),
     path("accounts/blocks/", account_views.address_blocks, name="address_blocks"),
+    path("accounts/blocks/list/", account_views.address_block_list, name="address_block_list"),
     path("accounts/demo/", account_views.demo_accounts, name="demo_accounts"),
     path("dev/outbox/", account_views.local_outbox, name="local_outbox"),
     path("account/passkeys/options/", passkey_views.register_options, name="passkey_register_options"),

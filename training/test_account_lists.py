@@ -1,12 +1,14 @@
 from datetime import timedelta
+from io import StringIO
 from urllib.parse import urlencode
 
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .accounts import pending_applications
-from .models import Employee
+from .models import AddressBlock, Employee, SecurityEvent
 from .test_account_wayfinding import unconfirmed_applicant
 from .test_accounts import PASSWORD, real_employee
 
@@ -114,3 +116,56 @@ class AccountListTests(TestCase):
         for employee in (mixed, accented, unconfirmed):
             employee.refresh_from_db()
             self.assertEqual(pending_applications().filter(pk=employee.pk).exists(), employee.email_is_verified)
+
+
+@override_settings(DEBUG=True, DEV_AUTH_STUB=True)
+class BlockListTests(TestCase):
+    def setUp(self):
+        self.client.defaults["HTTP_HOST"] = "localhost"
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        self.client.post(reverse("sign_in"), {"username": "admin@example.com", "password": PASSWORD},
+                         REMOTE_ADDR="10.9.9.9")
+        now = timezone.now()
+        for index in range(12):
+            AddressBlock.objects.create(network=f"198.51.100.{index}/32", failure_count=51,
+                                        created_at=now - timedelta(minutes=index), expires_at=now + timedelta(hours=1))
+
+    def test_blocked_addresses_previews_ten_and_links_to_the_rest(self):
+        content = self.client.get(reverse("address_blocks")).content.decode()
+        self.assertEqual(content.count('value="lift"'), 10)
+        self.assertIn("See all 12", content)
+        self.assertIn(f'href="{reverse("address_block_list")}?show=active"', content)
+
+    def test_the_full_list_pages_and_keeps_the_lift_action(self):
+        response = self.client.get(f"{reverse('address_block_list')}?show=active&q=198.51.100.11")
+        self.assertContains(response, "198.51.100.11/32")
+        self.assertNotContains(response, "198.51.100.1/32")
+        page = f"{reverse('address_block_list')}?{urlencode({'show': 'active', 'q': '198.51.100.11', 'page': 1})}"
+        response = self.client.post(f"{reverse('address_blocks')}?{urlencode({'return_to': page})}",
+                                    {"action": "lift", "network": "198.51.100.11/32"}, follow=True)
+        self.assertContains(response, "Block lifted.")
+        self.assertEqual(response.context["show"], "active")
+        self.assertEqual(AddressBlock.objects.filter(ended_at__isnull=True).count(), 11)
+
+    def test_unblock_address_list_still_shows_every_open_block(self):
+        output = StringIO()
+        call_command("unblock_address", "--list", stdout=output)
+        self.assertEqual(output.getvalue().count("198.51.100."), 12)
+
+    def test_events_page_in_a_stable_order(self):
+        when = timezone.now()
+        for index in range(30):
+            SecurityEvent.objects.create(kind=SecurityEvent.Kind.BLOCK_LIFTED, network=f"203.0.113.{index}/32",
+                                         occurred_at=when)
+        first = self.client.get(f"{reverse('address_block_list')}?show=events").context["browse"].page
+        second = self.client.get(f"{reverse('address_block_list')}?show=events&page=2").context["browse"].page
+        seen = [event.pk for event in first] + [event.pk for event in second]
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(len(seen), 30)
+
+    def test_only_real_administrators_open_the_block_lists(self):
+        self.client.post(reverse("sign_out"))
+        real_employee("worker@example.com")
+        self.client.post(reverse("sign_in"), {"username": "worker@example.com", "password": PASSWORD},
+                         REMOTE_ADDR="10.9.9.9")
+        self.assertEqual(self.client.get(reverse("address_block_list")).status_code, 403)

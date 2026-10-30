@@ -1,9 +1,0 @@
-<div class="section-heading"><h2>{{ title }}</h2><span class="section-count">{{ section.total }} {{ count_label }}</span></div>
-<div class="collection-panel">
-{% for employee in section.items %}
-  {% include "training/_account_row.html" %}
-{% empty %}
-  <p class="empty-state">{{ empty }}</p>
-{% endfor %}
-</div>
-{% if section.more %}<p class="see-all"><a href="{% url 'account_list' %}?status={{ row_kind }}">See all {{ section.total }} <span class="visually-hidden">{{ title|lower }}</span></a></p>{% endif %}

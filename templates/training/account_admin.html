@@ -14,8 +14,8 @@
       <div class="employee-form-action"><button type="submit">Send invitation</button></div>
     </div>
   </form>
-  {% include "training/_account_section.html" with title="Applications" section=applications row_kind="applications" count_label="waiting" empty="No applications are waiting." %}
-  {% include "training/_account_section.html" with title="Waiting for email confirmation" section=unconfirmed row_kind="unconfirmed" count_label="waiting" empty="Every registration has confirmed its email address." %}
-  {% include "training/_account_section.html" with title="Waiting for setup" section=invited row_kind="setup" count_label="waiting" empty="Everyone invited has set up their account." %}
-  {% include "training/_account_section.html" with title="Recent decisions" section=recent row_kind="decided" count_label="in all" empty="No decisions yet." %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Applications" section=applications row_template="training/_account_row.html" row_kind="applications" count_label="waiting" empty="No applications are waiting." see_all_url=list_url|add:"?status=applications" %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Waiting for email confirmation" section=unconfirmed row_template="training/_account_row.html" row_kind="unconfirmed" count_label="waiting" empty="Every registration has confirmed its email address." see_all_url=list_url|add:"?status=unconfirmed" %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Waiting for setup" section=invited row_template="training/_account_row.html" row_kind="setup" count_label="waiting" empty="Everyone invited has set up their account." see_all_url=list_url|add:"?status=setup" %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Recent decisions" section=recent row_template="training/_account_row.html" row_kind="decided" count_label="in all" empty="No decisions yet." see_all_url=list_url|add:"?status=decided" %}
 {% endblock %}

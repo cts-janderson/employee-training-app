@@ -1,0 +1,15 @@
+{% with block=item %}
+<article class="collection-row security-row">
+  <div class="record-main"><h3>{{ block.network }}</h3>
+    {% if row_kind == "active" %}<p class="record-subtitle">Blocked {{ block.created_at|date:"M j, Y H:i" }} after {{ block.failure_count }} failed sign-ins · {% if block.expires_at %}ends {{ block.expires_at|date:"M j, Y H:i" }}{% else %}permanent{% endif %}</p>
+    {% else %}<p class="record-subtitle">Blocked {{ block.created_at|date:"M j, Y H:i" }} · {% if block.end_reason == "lifted" %}lifted by {{ block.ended_by.name }}{% elif block.end_reason %}{{ block.get_end_reason_display|lower }}{% else %}expired{% endif %} {{ block.ended_at|default:block.expires_at|date:"M j, Y H:i" }}</p>{% endif %}
+  </div>
+  {% if row_kind == "active" %}
+    <form method="post" class="actions" action="{% url 'address_blocks' %}{% if action_query %}?{{ action_query }}{% endif %}">
+      {% csrf_token %}<input type="hidden" name="network" value="{{ block.network }}"><input type="hidden" name="block_id" value="{{ block.id }}">
+      <button type="submit" name="action" value="lift">Lift block</button>
+      {% if block.expires_at %}<button type="submit" name="action" value="permanent" class="secondary">Make permanent</button>{% endif %}
+    </form>
+  {% endif %}
+</article>
+{% endwith %}

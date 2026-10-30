@@ -413,7 +413,35 @@ def address_blocks(request):
             notice = "Block made permanent."
         else:
             notice = "That block has already ended."
+        if "return_to" in request.GET:
+            request.session["blocks_notice"] = notice
+            return redirect(safe_return_to(request, "address_block_list"))
+    overview = blocks_overview()
     return render(request, "training/address_blocks.html", {
-        **blocks_overview(), "notice": notice, "org_time_zone": settings.ORG_TIME_ZONE,
-        "block_hours": settings.ADDRESS_BLOCK_HOURS,
+        "active_blocks": preview(overview["active_blocks"], "log"),
+        "ended_blocks": preview(overview["ended_blocks"], "log"),
+        "events": preview(overview["events"], "log"),
+        "notice": notice, "org_time_zone": settings.ORG_TIME_ZONE, "block_hours": settings.ADDRESS_BLOCK_HOURS,
+    })
+
+
+# The full lists behind each Blocked addresses section, with what search looks in.
+BLOCK_LISTS = {
+    "active": ("Active blocks", "active_blocks", ["network"]),
+    "ended": ("Ended blocks", "ended_blocks", ["network"]),
+    "events": ("Security events", "events", ["network", "detail"]),
+}
+
+
+@account_admin_required
+def address_block_list(request):
+    show = request.GET.get("show")
+    if show not in BLOCK_LISTS:
+        show = "active"
+    label, key, search_fields = BLOCK_LISTS[show]
+    listing = browse(request, blocks_overview()[key], search_fields=search_fields, extra_params={"show": show})
+    return render(request, "training/address_block_list.html", {
+        "browse": listing, "show": show, "label": label, "browse_label": label.lower(),
+        "shows": [(name, title) for name, (title, _key, _fields) in BLOCK_LISTS.items()],
+        "notice": request.session.pop("blocks_notice", ""), "org_time_zone": settings.ORG_TIME_ZONE,
     })

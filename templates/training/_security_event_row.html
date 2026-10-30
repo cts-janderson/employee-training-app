@@ -1,0 +1,5 @@
+{% with event=item %}
+<article class="collection-row security-row">
+  <div class="record-main"><h3>{{ event.get_kind_display }}</h3><p class="record-subtitle">{{ event.occurred_at|date:"M j, Y H:i" }}{% if event.network %} · {{ event.network }}{% endif %}{% if event.employee %} · {{ event.employee.name }}{% endif %}{% if event.actor %} · by {{ event.actor.name }}{% endif %}{% if event.detail %} · {{ event.detail }}{% endif %}</p></div>
+</article>
+{% endwith %}

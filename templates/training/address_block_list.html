@@ -1,0 +1,22 @@
+{% extends "training/base.html" %}
+{% load tz %}
+{% block title %}{{ label }} · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>{{ label }}</h1><p class="muted">Newest first.</p></div><a class="button secondary" href="{% url 'address_blocks' %}">Blocked addresses</a></div>
+  {% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+  <nav class="chart-mode-nav" aria-label="Blocked addresses lists">
+    {% for key, name in shows %}<a href="{% url 'address_block_list' %}?show={{ key }}" {% if key == show %}aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}
+  </nav>
+  {% include "training/_browse_controls.html" %}
+  {% timezone org_time_zone %}
+  {% with row_kind=show action_query=browse.return_to_query %}
+  <div class="collection-panel">
+  {% for item in browse.page %}
+    {% if show == "events" %}{% include "training/_security_event_row.html" %}{% else %}{% include "training/_block_row.html" %}{% endif %}
+  {% empty %}
+    <p class="empty-state">{% if browse.query %}Nothing matches that search.{% else %}Nothing here yet.{% endif %}</p>
+  {% endfor %}
+  </div>
+  {% endwith %}
+  {% endtimezone %}
+{% endblock %}
