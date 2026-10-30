@@ -11,12 +11,12 @@ Codex reviewed a first draft on October 30, 2026. Its corrections are folded in 
 - **Full lists:** the **Accounts** sections share one **All accounts** page with a status filter, not one page per section.
 - **Scope of this pass:** **Accounts**, **Blocked addresses** and **Notifications**. Groups are left for later.
 - **Email digest approved:** the removal event keeps a keyed digest of the email, so someone who knows an address can later check whether its registration was removed.
-- **Passkeys stay with administrators:** `manage.py remove_passkeys` refuses an employee who isn't an administrator, because only administrators can have a passkey.
+- **Passkeys stay with administrators:** `manage.py remove_passkeys` refuses an employee who isn't an administrator and has no passkeys, because only administrators can have a passkey. It still cleans up a former administrator's leftover passkeys.
 
 ## When deleting is safe
 
 - **Usually nothing refers to a registration.** Only approved employees can receive assignments or join groups (`assignable()` in [plan 31](31-real-employee-workflows.md)). Registration creates no notification, because account emails don't use that model.
-- **One exception, now closed:** `manage.py remove_passkeys` recorded a security event for any real employee, even one with no passkeys. It now refuses anyone who isn't an administrator, so it can't attach an event to a registration.
+- **One exception, now closed:** `manage.py remove_passkeys` recorded a security event for any real employee, even one with no passkeys. It now refuses anyone who isn't an administrator and has no passkeys, so it can't attach an event to a registration.
 - **Delete defensively:** catch `ProtectedError` for every delete. A manual removal is then refused with a clear message, and expiry skips that row and carries on. `Passkey` and `PasskeyChallenge` cascade, but a registration has neither.
 
 ## Design
@@ -113,7 +113,7 @@ The sizes live in one place (`PREVIEW_SIZES` in `training/browsing.py`), so a la
 ## Tests
 
 - **Removal:**
-  - `remove_passkeys` refuses an employee who isn't an administrator, and records nothing.
+  - `remove_passkeys` refuses an employee who isn't an administrator and has no passkeys, and records nothing.
   - An administrator removes an unconfirmed registration. The record is gone, the email can register again, and a `registration_removed` event names the administrator, holds the removed ID and the email digest, and doesn't contain the email.
   - Removal is refused for a confirmed, decided, approved, demo or inactive employee.
   - A registration with a protected reference (a `remove_passkeys` event) is refused cleanly.
