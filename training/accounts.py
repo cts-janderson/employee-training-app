@@ -167,7 +167,7 @@ def _link(route, employee, tokens):
     return settings.APP_BASE_URL + reverse(route, args=[uidb64, tokens.make_token(employee)])
 
 
-_EMAILS = {
+ACCOUNT_EMAILS = {
     "verify": ("Confirm your email address", "verify_email", verification_tokens),
     "setup": ("Set up your training account", "account_setup", setup_tokens),
     "reset": ("Reset your training password", "password_reset_confirm", reset_tokens),
@@ -198,7 +198,7 @@ def _account_email_lock(employee_id):
 
 def send_account_email(employee, purpose):
     """Send after the surrounding transaction commits. A new link supersedes earlier ones."""
-    subject, route, tokens = _EMAILS[purpose]
+    subject, route, tokens = ACCOUNT_EMAILS[purpose]
 
     def send():
         # One send per employee at a time. The new generation is committed before the email leaves, so a

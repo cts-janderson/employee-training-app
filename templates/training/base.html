@@ -46,6 +46,7 @@
           <a href="{% url 'sign_in' %}" {% if request.resolver_match.url_name == 'sign_in' %}aria-current="page"{% endif %}>Sign in</a>
           {% if demo_enabled %}<a href="{% url 'demo_switch' %}" {% if request.resolver_match.url_name == 'demo_switch' %}aria-current="page"{% endif %}>Switch profile</a>{% endif %}
         {% endif %}
+        {% if demo_enabled %}<a href="{% url 'local_outbox' %}" {% if request.resolver_match.url_name == 'local_outbox' %}aria-current="page"{% endif %}>Local outbox</a>{% endif %}
       </div>
     </aside>
     <div class="workspace">

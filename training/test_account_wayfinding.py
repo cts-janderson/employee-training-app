@@ -109,3 +109,19 @@ class AccountWayfindingTests(TestCase):
     @override_settings(DEV_AUTH_STUB=False)
     def test_sign_in_never_shows_the_command_without_the_stub(self):
         self.assertNotContains(self.client.get(reverse("sign_in")), "No administrator account exists yet")
+
+    # Local outbox
+
+    def test_local_outbox_lists_account_links_newest_first(self):
+        self.register("first@example.com")
+        self.register("second@example.com")
+        response = self.client.get(reverse("local_outbox"))
+        content = response.content.decode()
+        self.assertIn("/account/verify/", content)
+        self.assertLess(content.index("To second@example.com"), content.index("To first@example.com"))
+
+    def test_local_outbox_is_refused_off_loopback_and_without_the_stub(self):
+        self.assertEqual(self.client.get(reverse("local_outbox"), REMOTE_ADDR="203.0.113.9").status_code, 403)
+        with self.settings(DEV_AUTH_STUB=False):
+            self.assertEqual(self.client.get(reverse("local_outbox")).status_code, 403)
+            self.assertNotContains(self.client.get(reverse("sign_in")), "Local outbox")

@@ -1,9 +1,12 @@
+import re
+
 from django.conf import settings
 from django.contrib.auth import logout, update_session_auth_hash, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.http import HttpResponseRedirect
 from django.contrib.auth.views import INTERNAL_RESET_SESSION_TOKEN
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import redirect, render
@@ -14,6 +17,7 @@ from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.http import require_http_methods
 
 from .accounts import (
+    ACCOUNT_EMAILS,
     AccountInputError,
     AccountState,
     account_state,
@@ -38,7 +42,7 @@ from .accounts import (
     verify_email,
 )
 from .dev_auth import (account_admin_required, admin_required, clear_real_session, demo_enabled,
-                       mark_real_session)
+                       demo_environment_required, mark_real_session)
 from .models import Employee
 from .sign_in_protection import (
     active_block,
@@ -319,6 +323,16 @@ def demo_accounts(request):
     if not request.employee.is_demo:
         return redirect("account_admin")
     return render(request, "training/demo_accounts.html", {"first_run_hint": _first_run_hint()})
+
+
+@demo_environment_required
+def local_outbox(request):
+    """Account emails this server process sent to the in-memory sink, newest first, for local testing."""
+    subjects = {subject for subject, _route, _tokens in ACCOUNT_EMAILS.values()}
+    emails = [{"to": ", ".join(message.to), "subject": message.subject,
+               "link": (re.search(r"https?://\S+", message.body) or [""])[0]}
+              for message in reversed(getattr(mail, "outbox", [])) if message.subject in subjects]
+    return render(request, "training/local_outbox.html", {"emails": emails[:50]})
 
 
 @require_http_methods(["GET", "POST"])
