@@ -40,7 +40,7 @@ Added after the owner couldn't find an unconfirmed registration, October 30, 202
 
 - **Accounts** gets a **Waiting for email confirmation** section between **Applications** and **Waiting for setup**. It lists active, pending, real registrations whose email isn't confirmed, with the same row layout, and an **Email not sent** badge after a failed send.
 - **Resend link** sends a new verify link. It has no approve or reject action: verification still comes before approval (plan 29). The resend counts against the same `account_email` limit as the applicant's own resend, so the two can't add up to more emails.
-- Both resend buttons on **Accounts** now confirm with a one-time notice, for example "Confirmation link sent to …".
+- Both resend buttons on **Accounts** now report the outcome once, on the next page view: "Confirmation link sent to …", or an error notice when the send failed ("… may not have been sent. Try again later."). The message is chosen from the recorded send outcome, because the request that clicked the button can't see whether the send succeeded. That outcome (`link_send_failed_at`) is shared by all of an employee's account emails, so another email to the same employee that finishes between the click and the page view can decide the notice. This is accepted: the window is milliseconds, and the row's **Email not sent** badge uses the same field.
 
 ## Tests
 
