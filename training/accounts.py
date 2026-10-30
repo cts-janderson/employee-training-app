@@ -1,6 +1,4 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
-import hashlib
-import hmac
 import logging
 import unicodedata
 from contextlib import contextmanager
@@ -18,6 +16,7 @@ from django.db import IntegrityError, connection, transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -121,7 +120,7 @@ def rate_limited(scope, key, *, now=None):
             f"INSERT INTO {table} (scope, key_digest, window_start, count) VALUES (%s, %s, %s, 1) "
             f"ON CONFLICT (scope, key_digest, window_start) DO UPDATE SET count = {table}.count + 1 "
             "RETURNING count",
-            [scope, hmac.new(settings.SECRET_KEY.encode(), key.encode(), hashlib.sha256).hexdigest(), window_start],
+            [scope, salted_hmac("training.rate_limit", key, algorithm="sha256").hexdigest(), window_start],
         )
         return cursor.fetchone()[0] > limit
 

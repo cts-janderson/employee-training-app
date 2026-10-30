@@ -808,7 +808,7 @@ class WorkerHeartbeat(models.Model):
 class RateLimitCounter(models.Model):
     """Account requests counted in one fixed window, shared by every process that serves requests."""
     scope = models.CharField(max_length=50)
-    # An HMAC-SHA256 of the limited key under SECRET_KEY: without the secret, nobody can test a guessed email or address.
+    # An HMAC-SHA256 of the limited key, keyed from SECRET_KEY: without the secret, nobody can test a guessed email or address.
     key_digest = models.CharField(max_length=64)
     window_start = models.DateTimeField()
     count = models.PositiveIntegerField()
