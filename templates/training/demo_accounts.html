@@ -1,0 +1,14 @@
+{% extends "training/base.html" %}
+{% block title %}Accounts · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Accounts</h1><p class="muted">Applications, invitations and blocked addresses belong to real employee accounts.</p></div></div>
+  <div class="card stack">
+    <p>You're using a demo profile, so you can't manage real accounts. Sign in with an administrator's email and password instead.</p>
+    {% if first_run_hint %}
+      <p>No real administrator exists yet. Create one from the project folder:</p>
+      <pre><code>.venv/bin/python manage.py create_administrator --name "…" --email …</code></pre>
+      <p class="muted">Export the variables <code>scripts/start-local.sh</code> sets first, including <code>DATABASE_URL</code>.</p>
+    {% endif %}
+    <div><a class="button" href="{% url 'sign_in' %}">Go to sign-in</a></div>
+  </div>
+{% endblock %}

@@ -321,6 +321,10 @@ def pending_applications():
     ).exclude(verified_email="").order_by("created_at", "id") if employee.email_is_verified]
 
 
+def real_administrator_exists():
+    return Employee.objects.filter(role=Employee.Role.ADMINISTRATOR, is_demo=False).exists()
+
+
 def awaiting_setup():
     return Employee.objects.filter(
         is_demo=False, approval_status=Employee.Approval.APPROVED, is_active=True,

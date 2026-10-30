@@ -33,6 +33,8 @@
             {% if open_blocks %}
               <a class="nav-sub" href="{% url 'address_blocks' %}" {% if request.resolver_match.url_name == 'address_blocks' %}aria-current="page"{% endif %}>Blocked addresses <span class="nav-count alert">{{ open_blocks }}<span class="visually-hidden"> {{ open_blocks|pluralize:"network,networks" }} blocked</span></span></a>
             {% endif %}
+          {% else %}
+            <a href="{% url 'demo_accounts' %}" {% if request.resolver_match.url_name == 'demo_accounts' %}aria-current="page"{% endif %}>Accounts</a>
           {% endif %}
         {% endif %}
       </nav>

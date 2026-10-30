@@ -26,6 +26,7 @@ from .accounts import (
     normalize_email,
     pending_applications,
     rate_limited,
+    real_administrator_exists,
     redeem_link,
     register,
     request_password_reset,
@@ -36,7 +37,8 @@ from .accounts import (
     verification_tokens,
     verify_email,
 )
-from .dev_auth import account_admin_required, mark_real_session, clear_real_session
+from .dev_auth import (account_admin_required, admin_required, clear_real_session, demo_enabled,
+                       mark_real_session)
 from .models import Employee
 from .sign_in_protection import (
     active_block,
@@ -67,6 +69,11 @@ def _blocked(request):
     return _message(request, "Sign-in blocked",
                     "Sign-in from your network is blocked. Contact an administrator.", status=403,
                     link=reverse("sign_in"), link_text="Administrators: sign in with a passkey")
+
+
+def _first_run_hint():
+    """Locally, point at the command that creates the first real administrator. Production never shows it."""
+    return demo_enabled() and not real_administrator_exists()
 
 
 class SignInView(auth_views.LoginView):
@@ -301,6 +308,14 @@ def _admin_context(**extra):
                   .select_related("approval_decided_by").order_by("-approval_decided_at")[:20],
         **extra,
     }
+
+
+@admin_required
+def demo_accounts(request):
+    """Tell a demo administrator why real accounts aren't theirs to manage, without showing any."""
+    if not request.employee.is_demo:
+        return redirect("account_admin")
+    return render(request, "training/demo_accounts.html", {"first_run_hint": _first_run_hint()})
 
 
 @require_http_methods(["GET", "POST"])

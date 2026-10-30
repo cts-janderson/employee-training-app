@@ -71,3 +71,30 @@ class AccountWayfindingTests(TestCase):
             self.assertNotContains(response, 'href="/accounts/')
             self.client.post(reverse("sign_out"))
         self.assertNotContains(self.client.get(reverse("sign_in")), "nav-count")
+
+    # Demo administrators
+
+    def test_demo_administrator_is_told_how_to_reach_real_accounts(self):
+        self.client.get(reverse("my_training"))  # demo administrator session
+        response = self.client.get(reverse("my_training"))
+        self.assertContains(response, f'href="{reverse("demo_accounts")}"')
+        response = self.client.get(reverse("demo_accounts"))
+        self.assertContains(response, "You're using a demo profile")
+        self.assertContains(response, "manage.py create_administrator")
+
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        real_employee("applicant@example.com", approval_status=Employee.Approval.PENDING)
+        response = self.client.get(reverse("demo_accounts"))
+        self.assertNotContains(response, "manage.py create_administrator")
+        self.assertNotContains(response, "applicant@example.com")
+        self.assertNotContains(response, "nav-count")
+
+    def test_real_administrator_is_sent_from_the_demo_page_to_accounts(self):
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        self.sign_in("admin@example.com")
+        self.assertRedirects(self.client.get(reverse("demo_accounts")), reverse("account_admin"))
+
+    def test_demo_employee_cant_open_the_demo_accounts_page(self):
+        worker = Employee.objects.create(name="Demo worker", email="worker@example.test", is_demo=True)
+        self.client.post(reverse("demo_switch"), {"employee_id": worker.pk})
+        self.assertEqual(self.client.get(reverse("demo_accounts")).status_code, 403)
