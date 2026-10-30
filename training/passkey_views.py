@@ -36,10 +36,9 @@ def _credential(request):
 @login_required
 @require_POST
 def register_options(request):
-    """Check the re-entered password, then return creation options."""
+    """Check the password, then return creation options whose challenge allows one passkey."""
     try:
-        passkeys.reauthenticate(request, request.user, request.POST.get("password", ""))
-        return _options(passkeys.registration_options(request, request.user))
+        return _options(passkeys.registration_options(request, request.user, request.POST.get("password", "")))
     except PasskeyError as exc:
         return _error(str(exc))
 
@@ -61,8 +60,7 @@ def register_verify(request):
 @require_POST
 def remove(request, passkey_id):
     try:
-        passkeys.reauthenticate(request, request.user, request.POST.get("password", ""))
-        passkeys.remove(request, request.user, passkey_id)
+        passkeys.remove(request.user, passkey_id, request.POST.get("password", ""))
         request.session["passkey_notice"] = "Passkey removed."
     except PasskeyError as exc:
         request.session["passkey_notice"] = str(exc)
