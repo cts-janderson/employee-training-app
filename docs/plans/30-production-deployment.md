@@ -26,7 +26,7 @@ Outcome: one Docker Compose stack that runs on any Linux host with outbound HTTP
   - `backup`: `pg_dump` with an off-host copy
 
   Record this in ADR-0010, which amends the hosting paragraph of ADR-0002.
-- **Email through Microsoft Graph `sendMail`, not SMTP AUTH.** Microsoft is disabling Basic SMTP AUTH by default for existing tenants at the end of December 2026. Django's SMTP backend can't use OAuth, and a relay connector needs port 25 plus a static IP or certificate, which conflicts with "any host". Graph uses the client-credentials flow: an Entra app registration with the `Mail.Send` application permission, limited to the sender mailbox by an Exchange application access policy. It needs only outbound HTTPS. Its responses also make failures easy to classify (see step C). Record this in ADR-0011.
+- **Email through Microsoft Graph `sendMail`, not SMTP AUTH.** Microsoft is disabling Basic SMTP AUTH by default for existing tenants at the end of December 2026. Django's SMTP backend can't use OAuth, and a relay connector needs port 25 plus a static IP or certificate, which conflicts with "any host". Graph uses the client-credentials flow: an Entra app registration with the `Mail.Send` application permission, limited to the sender mailbox through Exchange RBAC for Applications. It needs only outbound HTTPS. Its responses also make failures easy to classify (see step C). Record this in ADR-0011.
 - **TLS:** Caddy obtains a public certificate through an ACME DNS-01 challenge against the `critical-technology.com` Cloudflare zone. This needs a custom Caddy build with the Cloudflare DNS module (`xcaddy`). It works whether or not the host is reachable from the internet, and no client has to trust a private CA.
 - **Rate limits:** stored in a dedicated PostgreSQL counter table with an atomic upsert, not in Django's `DatabaseCache`. That cache's `incr` isn't atomic, it resets expiry, and culling can drop live counters.
 - **Stub isolation:** production runs with `DJANGO_DEBUG=0` and `DEV_AUTH_STUB=0`. The existing `ImproperlyConfigured` guard enforces this.
@@ -116,7 +116,7 @@ Done; see **Status** below. These parts move to later steps:
 
 - `docs/deployment.md`:
   - Host prerequisites: Docker, outbound HTTPS, a DNS name, and a Cloudflare DNS token.
-  - Entra and Exchange setup: app registration, `Mail.Send`, the application access policy, sender mailbox, SPF and DKIM.
+  - Entra and Exchange setup: app registration, the scoped `Application Mail.Send` role (no Entra-level grant), sender mailbox, SPF and DKIM; see [RBAC for Applications](https://learn.microsoft.com/en-us/exchange/permissions-exo/application-rbac).
   - First deployment, then `create_administrator`, which prompts for a password.
   - Upgrade and rollback, logs, backup and restore, secret rotation (client secret expiry), and the `ops_status` alert runbook (ambiguous notification reconciliation, worker restart).
   - Offboarding.
@@ -124,7 +124,7 @@ Done; see **Status** below. These parts move to later steps:
 
 ### H. Release gates (owner actions)
 
-- The owner names the operational owner and approves the data policy, then provisions the host and DNS name, the Entra app registration with admin consent, the access policy, and the off-host backup target.
+- The owner names the operational owner and approves the data policy, then provisions the host and DNS name, the Entra app registration with its Exchange-scoped mail permission, and the off-host backup target.
 - Run a smoke deployment with synthetic data on the target host before inviting any real employee.
 
 ### Review findings to fold in
