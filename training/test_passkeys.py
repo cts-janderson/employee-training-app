@@ -213,8 +213,16 @@ class PasskeyTests(TestCase):
         self.assertContains(retried, "expired", status_code=400)
 
     def test_one_password_reentry_allows_one_change(self):
-        self.add_passkey()
-        self.assertNotIn("passkey_reauthenticated_at", self.admin_browser.session)
+        first, second = FakeAuthenticator(), FakeAuthenticator()
+        options = [self.admin_browser.post(reverse("passkey_register_options"), {"password": PASSWORD}).json()
+                   for _ in range(2)]
+        added = self.json_post(self.admin_browser, "passkey_register_verify",
+                               {"credential": first.create(options[0]), "name": "First"})
+        self.assertEqual(added.status_code, 200)
+        refused = self.json_post(self.admin_browser, "passkey_register_verify",
+                                 {"credential": second.create(options[1]), "name": "Second"})
+        self.assertContains(refused, "Enter your password again", status_code=400)
+        self.assertEqual(Passkey.objects.count(), 1)
 
     # Removing passkeys
 
