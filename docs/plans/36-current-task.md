@@ -261,7 +261,8 @@ Done October 30, 2026:
 - **Roles.** `docker/entrypoint.sh` runs `migrate`, `web`, `worker`, `cleanup`, `healthcheck` or `manage <command>`.
 - **Stack.** `compose.yaml`:
   - Every app service runs with `init: true`, so SIGTERM reaches Python. The worker has `stop_grace_period: 60s`.
-  - Networks: `web` has no published ports and shares the `edge` network (`172.30.0.0/24`) with the proxy alone. `TRUSTED_PROXY_NETWORKS` is the proxy's fixed address, `172.30.0.10/32`. `db`, `migrate` and `cleanup` are only on the `internal` network, which has no internet access. `worker` also joins `egress` to reach Graph.
+  - Networks: `web` has no published ports. It shares `edge` (`172.30.0.0/24`) with the proxy alone and `web_db` with `db` alone, so no other container can send it forwarded headers. `TRUSTED_PROXY_NETWORKS` is the proxy's fixed address, `172.30.0.10/32`. `db`, `migrate`, `worker` and `cleanup` share `jobs`. Neither `web_db` nor `jobs` has internet access. `worker` also joins `egress` to reach Graph.
+  - App services run with `no-new-privileges` and no Linux capabilities.
   - `TLS_MODE=internal` switches Caddy to its own CA for a local stack.
 - **Database roles.** `docker/postgres/provision-roles.sql` (run by `provision-roles.sh`) does what step 1 above describes. It runs in one transaction and also moves any table not owned by `training_owner` to it, for a restore made as the superuser. `docker/postgres/check-roles.sh` runs the permission checks. Step 2's restore rehearsal reuses both.
 - **App changes.** `/health/` runs `SELECT 1` and returns 503 when it fails. `cleanup_training_imports` also runs `clearsessions` once at start and then hourly with `--loop`. Gunicorn's access and error logs redact account links through `config/gunicorn_logging.py`.
@@ -275,6 +276,8 @@ Done October 30, 2026:
   - The upgrade steps from plan 30 ran: stop, `run --rm migrate`, `up -d`.
   - `check --deploy` in the image reports only the two HSTS warnings.
 - **Not verified:** the Cloudflare DNS-01 certificate (needs the zone token) and sending through a real Graph tenant. Both are owner actions under plan 30 step H.
+- **Review fixes:** gunicorn's timeout is 75 seconds, not 30, because account emails still go out in the request. A token request, a send, and a refresh and resend after a 401 can each take 15 seconds. Caddy's runtime log redacts account-link paths and drops `Referer`, because its 502 error entries carry the request. Percent-encoded account links are redacted in the app's logs too.
+- **For step 4:** once account emails leave the request path, put gunicorn's timeout back to 30 seconds in `docker/entrypoint.sh`.
 - **For step 3:**
   - Document the upgrade procedure, provisioning by hand (`exec db sh /provision/provision-roles.sh`) and `check-roles.sh`.
   - Say that `172.30.0.0/24` must not clash with the host's networks.

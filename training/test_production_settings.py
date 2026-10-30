@@ -121,6 +121,12 @@ class RedactionTests(SimpleTestCase):
         self.assertNotIn("tok-en", record.getMessage())
         self.assertEqual(redact_account_links("GET /account/sign-in/"), "GET /account/sign-in/")
 
+    def test_percent_encoded_account_links_are_redacted(self):
+        self.assertEqual(redact_account_links("GET /account/%76erify/MTIz/tok-en/ HTTP/1.1"),
+                         "GET /account/verify/[redacted]/ HTTP/1.1")
+        self.assertEqual(redact_account_links("GET /account/reset/MTIz%2Ftok-en/"), "GET /account/reset/[redacted]/")
+        self.assertEqual(redact_account_links("GET /search/?q=a%20b"), "GET /search/?q=a%20b")
+
     def test_tracebacks_are_redacted_too(self):
         try:
             raise ValueError("failed for /account/setup/MTIz/tok-en/")

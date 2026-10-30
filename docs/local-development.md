@@ -21,7 +21,7 @@ If you use a different database name, user, host, or port, export a matching `DA
 ./scripts/start-local.sh
 ```
 
-The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, starts the import-review cleanup loop, and starts Django at <http://localhost:8000/>. Use `localhost`, not `127.0.0.1`, throughout: cookies and email links are per host. The cleanup loop stops when the startup script exits. Visit `/health/` for a simple health response. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
+The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, starts the import-review cleanup loop, and starts Django at <http://localhost:8000/>. Use `localhost`, not `127.0.0.1`, throughout: cookies and email links are per host. The cleanup loop stops when the startup script exits. Visit `/health/` for a health response: it runs a database query and returns 200, or 503 when the database can't be reached. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
 
 You can run the steps separately when diagnosing startup:
 
@@ -121,7 +121,7 @@ The normal startup script runs cleanup every minute. If running Django manually,
 DJANGO_DEBUG=1 DEV_AUTH_STUB=1 .venv/bin/python manage.py cleanup_training_imports --loop
 ```
 
-Omit `--loop` for a single cleanup pass. Expired uncommitted reviews and committed result records older than seven days are removed; created trainings remain. The same pass deletes ended rate-limit counters and expired passkey challenges, and removes unconfirmed registrations 7 days after their newest confirmation email (`UNCONFIRMED_REGISTRATION_DAYS`; needs migration `0021`). Raw uploads are never permanently saved. Configure a scheduled cleanup job before introducing any non-local deployment; the existing real-data gate still applies.
+Omit `--loop` for a single cleanup pass. Expired uncommitted reviews and committed result records older than seven days are removed; created trainings remain. The same pass deletes ended rate-limit counters and expired passkey challenges, and removes unconfirmed registrations 7 days after their newest confirmation email (`UNCONFIRMED_REGISTRATION_DAYS`; needs migration `0021`). Each run also clears expired sessions, and `--loop` repeats that hourly. Raw uploads are never permanently saved. Configure a scheduled cleanup job before introducing any non-local deployment; the existing real-data gate still applies.
 
 ## Completion reports
 

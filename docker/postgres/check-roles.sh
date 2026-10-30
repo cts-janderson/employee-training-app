@@ -35,7 +35,9 @@ expect "training_owner owns every table" "0" \
   "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tableowner <> 'training_owner';"
 expect "training_app can read and write every table" "0" \
   "SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')
-   AND NOT has_table_privilege('training_app', oid, 'SELECT, INSERT, UPDATE, DELETE');"
+   AND NOT (has_table_privilege('training_app', oid, 'SELECT') AND has_table_privilege('training_app', oid, 'INSERT')
+            AND has_table_privilege('training_app', oid, 'UPDATE') AND has_table_privilege('training_app', oid, 'DELETE'));"
+# A comma-separated list is true when any one privilege is held, which is what this check wants.
 expect "training_app has no TRUNCATE, REFERENCES or TRIGGER on any table" "0" \
   "SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')
    AND has_table_privilege('training_app', oid, 'TRUNCATE, REFERENCES, TRIGGER');"

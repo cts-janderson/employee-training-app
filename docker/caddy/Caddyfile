@@ -1,3 +1,14 @@
+{
+	# Caddy's error logs carry the request. Account links hold a live token in the path, and a page reached from
+	# one names it in Referer, so neither may reach the log (the app's own logs redact them too).
+	log default {
+		format filter {
+			request>uri regexp "(/account/(?:verify|reset|setup)/)[^/?\s]+/[^/?\s]+/?" "${1}[redacted]/"
+			request>headers>Referer delete
+		}
+	}
+}
+
 # TLS_MODE=cloudflare (the default) gets a public certificate through a Cloudflare DNS-01 challenge.
 # TLS_MODE=internal uses Caddy's own CA, for a local stack only.
 (tls_cloudflare) {

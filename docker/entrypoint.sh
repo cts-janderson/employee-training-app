@@ -10,7 +10,9 @@ case "$role" in
     exec python manage.py migrate --noinput
     ;;
   web)
-    exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers "${WEB_CONCURRENCY:-3}" --timeout 30 \
+    # Account emails still go out in the request (until plan 36 step 4): a token request, a send, and one refresh
+    # and resend after a 401 can each take MAIL_TIMEOUT_SECONDS (15), so the timeout must outlast all four.
+    exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers "${WEB_CONCURRENCY:-3}" --timeout 75 \
       --worker-tmp-dir /dev/shm --access-logfile - --logger-class config.gunicorn_logging.RedactingLogger
     ;;
   worker)
