@@ -1,12 +1,22 @@
+import re
 from datetime import timedelta
+from urllib.parse import urlsplit
 
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import AddressBlock, Employee
+from .accounts import AccountInputError, resend_verification_for
 from .sign_in_protection import lift_block
-from .test_accounts import PASSWORD, real_employee
+from .test_accounts import PASSWORD, limits, real_employee
+
+
+def unconfirmed_applicant(email):
+    applicant = real_employee(email, approval_status=Employee.Approval.PENDING)
+    Employee.objects.filter(pk=applicant.pk).update(verified_email="", email_verified_at=None)
+    return applicant
 
 
 def open_block(network="198.51.100.1/32", *, hours=24):
@@ -125,3 +135,53 @@ class AccountWayfindingTests(TestCase):
         with self.settings(DEV_AUTH_STUB=False):
             self.assertEqual(self.client.get(reverse("local_outbox")).status_code, 403)
             self.assertNotContains(self.client.get(reverse("sign_in")), "Local outbox")
+
+    # Unconfirmed registrations
+
+    def test_unconfirmed_registration_waits_for_email_confirmation_not_approval(self):
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        self.register()
+        self.sign_in("admin@example.com")
+        response = self.client.get(reverse("account_admin"))
+        content = response.content.decode()
+        confirmation = content.index("Waiting for email confirmation")
+        self.assertGreater(content.index("applicant@example.com"), confirmation)
+        self.assertNotIn('value="approve"', content)
+        self.assertNotContains(response, "nav-count")
+
+    def test_administrator_resends_a_confirmation_link_that_confirms_the_email(self):
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        self.register()
+        applicant = Employee.objects.get(email="applicant@example.com")
+        self.sign_in("admin@example.com")
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("account_admin"), {"action": "resend_verification",
+                                                                   "employee_id": applicant.pk}, follow=True)
+        self.assertContains(response, "Confirmation link sent to applicant@example.com.")
+        self.assertEqual([message.to for message in mail.outbox], [["applicant@example.com"]])
+
+        path = urlsplit(re.search(r"https?://\S+", mail.outbox[-1].body).group()).path
+        self.client.post(path)
+        response = self.client.get(reverse("account_admin"))
+        self.assertContains(response, 'value="approve"')
+        self.assertContains(response, "Every registration has confirmed its email address.")
+
+    @override_settings(ACCOUNT_RATE_LIMITS=limits(account_email=1))
+    def test_confirmation_resends_share_the_applicants_limit(self):
+        admin = real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        applicant = unconfirmed_applicant("applicant@example.com")
+        resend_verification_for(actor=admin, employee_id=applicant.pk)
+        with self.assertRaisesMessage(AccountInputError, "sent to this applicant recently"):
+            resend_verification_for(actor=admin, employee_id=applicant.pk)
+
+    def test_only_real_administrators_resend_and_only_to_unconfirmed_applicants(self):
+        admin = real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        confirmed = real_employee("confirmed@example.com", approval_status=Employee.Approval.PENDING)
+        unconfirmed = unconfirmed_applicant("unconfirmed@example.com")
+        with self.assertRaisesMessage(AccountInputError, "Administrator access is unavailable"):
+            resend_verification_for(actor=self.demo_admin, employee_id=unconfirmed.pk)
+        with self.assertRaisesMessage(AccountInputError, "already confirmed"):
+            resend_verification_for(actor=admin, employee_id=confirmed.pk)
+        with self.assertRaisesMessage(AccountInputError, "already confirmed"):
+            resend_verification_for(actor=admin, employee_id="not-an-id")

@@ -3,6 +3,7 @@
 {% block content %}
   <div class="page-heading"><div><p class="eyebrow">People</p><h1>Accounts</h1><p class="muted">Review applications and invite employees to sign in.</p></div><a class="button secondary" href="{% url 'address_blocks' %}">Blocked addresses</a></div>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {% if notice %}<p role="status">{{ notice }}</p>{% endif %}
   <form class="card employee-form" method="post">
     {% csrf_token %}
     <input type="hidden" name="action" value="invite">
@@ -27,6 +28,19 @@
     </article>
   {% empty %}
     <p class="empty-state">No applications are waiting.</p>
+  {% endfor %}
+  </div>
+  <div class="section-heading"><h2>Waiting for email confirmation</h2><span class="section-count">{{ unconfirmed|length }} waiting</span></div>
+  <div class="collection-panel">
+  {% for applicant in unconfirmed %}
+    <article class="collection-row employee-row">
+      <span class="person-avatar" aria-hidden="true">{{ applicant.name|first|upper|default:"?" }}</span>
+      <div class="record-main"><h3>{{ applicant.name }}</h3><p class="record-subtitle">{{ applicant.email }} · registered {{ applicant.created_at|date:"M j, Y" }}</p></div>
+      {% if applicant.link_send_failed_at %}<span class="record-status"><span class="badge amber">Email not sent</span></span>{% endif %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="employee_id" value="{{ applicant.id }}"><button type="submit" name="action" value="resend_verification">Resend link</button></form>
+    </article>
+  {% empty %}
+    <p class="empty-state">Every registration has confirmed its email address.</p>
   {% endfor %}
   </div>
   <div class="section-heading"><h2>Waiting for setup</h2></div>

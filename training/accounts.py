@@ -321,6 +321,13 @@ def pending_applications():
     ).exclude(verified_email="").order_by("created_at", "id") if employee.email_is_verified]
 
 
+def awaiting_verification():
+    """Registrations that haven't confirmed their email, so they can't join the approval queue yet."""
+    return [employee for employee in Employee.objects.filter(
+        is_demo=False, is_active=True, approval_status=Employee.Approval.PENDING,
+    ).order_by("created_at", "id") if not employee.email_is_verified]
+
+
 def real_administrator_exists():
     return Employee.objects.filter(role=Employee.Role.ADMINISTRATOR, is_demo=False).exists()
 
@@ -370,6 +377,18 @@ def invite_employee(*, actor, name, email, now=None):
     except IntegrityError:
         raise AccountInputError("An employee already uses that email.", field="email") from None
     send_account_email(employee, "setup")
+    return employee
+
+
+def resend_verification_for(*, actor, employee_id):
+    """Send an applicant a new verify link. Shares the applicant's own resend limit, so the two can't add up."""
+    _require_administrator(actor)
+    employee = next((employee for employee in awaiting_verification() if str(employee.pk) == str(employee_id)), None)
+    if employee is None:
+        raise AccountInputError("This applicant has already confirmed their email address.")
+    if rate_limited("account_email", f"verify:{employee.pk}"):
+        raise AccountInputError("A link was sent to this applicant recently. Try again later.")
+    send_account_email(employee, "verify")
     return employee
 
 

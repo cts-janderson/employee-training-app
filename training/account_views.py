@@ -22,6 +22,7 @@ from .accounts import (
     AccountState,
     account_state,
     awaiting_setup,
+    awaiting_verification,
     decide_application,
     invite_employee,
     is_account_administrator,
@@ -36,6 +37,7 @@ from .accounts import (
     request_password_reset,
     resend_setup,
     resend_verification,
+    resend_verification_for,
     reset_tokens,
     setup_tokens,
     verification_tokens,
@@ -294,7 +296,12 @@ def account_admin(request):
                 decide_application(actor=request.employee, employee_id=request.POST.get("employee_id"),
                                    approve=action == "approve")
             elif action == "resend_setup":
-                resend_setup(actor=request.employee, employee_id=request.POST.get("employee_id"))
+                employee = resend_setup(actor=request.employee, employee_id=request.POST.get("employee_id"))
+                request.session["account_notice"] = f"Setup link sent to {employee.email}."
+            elif action == "resend_verification":
+                employee = resend_verification_for(actor=request.employee,
+                                                   employee_id=request.POST.get("employee_id"))
+                request.session["account_notice"] = f"Confirmation link sent to {employee.email}."
             else:
                 error = AccountInputError("Choose an action.")
         except AccountInputError as exc:
@@ -302,7 +309,8 @@ def account_admin(request):
         if not error:
             return redirect("account_admin")
     return render(request, "training/account_admin.html", _admin_context(
-        error=error, form_name=request.POST.get("name", "") if error else "",
+        error=error, notice=request.session.pop("account_notice", ""),
+        form_name=request.POST.get("name", "") if error else "",
         form_email=request.POST.get("email", "") if error else "",
     ), status=400 if error else 200)
 
@@ -310,6 +318,7 @@ def account_admin(request):
 def _admin_context(**extra):
     return {
         "applications": pending_applications(),
+        "unconfirmed": awaiting_verification(),
         "invited": awaiting_setup(),
         "recent": Employee.objects.filter(is_demo=False, approval_decided_at__isnull=False)
                   .select_related("approval_decided_by").order_by("-approval_decided_at")[:20],

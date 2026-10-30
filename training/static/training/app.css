@@ -601,7 +601,7 @@ main { container: page / inline-size; }
   .employee-row { grid-template-columns: 2.6rem minmax(0, 1fr); gap: .6rem .85rem; }
   .security-row { grid-template-columns: minmax(0, 1fr); }
   .security-row input { width: 100%; }
-  .employee-row .record-role, .employee-row .record-status, .employee-row > .text-action { grid-column: 2; }
+  .employee-row .record-role, .employee-row .record-status, .employee-row > .text-action, .employee-row > form { grid-column: 2; }
   .assignment-results-header { display: none; }
   .assignment-results .assignment-row { grid-template-columns: minmax(0, 1fr) minmax(9rem, auto); gap: .8rem; }
   .assignment-results .assignment-row > .assignment-results-actions { grid-column: 1 / -1; justify-self: start; width: min(100%, 22rem); }
