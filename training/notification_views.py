@@ -2,6 +2,7 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
+from .browsing import browse
 from .dev_auth import admin_required
 from .models import Notification
 from .notifications import NotificationError, reconcile_notification, retry_notification
@@ -48,7 +49,6 @@ def notification_log(request):
     kind = request.GET.get("kind", "all")
     if kind not in {"all", *Notification.Kind.values}:
         kind = "all"
-    search = request.GET.get("q", "").strip()[:100]
     base = Notification.objects.filter(assignment__employee__is_demo=request.employee.is_demo)
     counts = base.aggregate(
         total=Count("id"),
@@ -59,22 +59,21 @@ def notification_log(request):
     )
     notifications = base.select_related(
         "assignment__employee", "assignment__version", "requested_by",
-    ).prefetch_related("reconciliations", "delivery_attempts").order_by("-created_at")
+    ).prefetch_related("reconciliations", "delivery_attempts").order_by("-created_at", "-pk")
     if status != "all":
         notifications = notifications.filter(status=status)
     if kind != "all":
         notifications = notifications.filter(kind=kind)
-    if search:
-        notifications = notifications.filter(
-            Q(assignment__employee__name__icontains=search)
-            | Q(assignment__version__title__icontains=search)
-        )
-    notifications = list(notifications)
+    # Paged before anything is evaluated, so guidance is built only for the rows on this page.
+    listing = browse(request, notifications, extra_params={"status": status, "kind": kind},
+                     search_fields=["assignment__employee__name", "assignment__version__title"])
+    search = listing.query
     return render(request, "training/notification_log.html", {
-        "notifications": notifications,
+        "browse": listing,
+        "browse_label": "notifications",
         "notification_rows": [{"item": item, "outcome": _delivery_guidance(item)[0],
                                "tone": _status_tone(item.status)}
-                              for item in notifications],
+                              for item in listing.page],
         "counts": counts,
         "selected_status": status,
         "selected_kind": kind,
