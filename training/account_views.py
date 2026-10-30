@@ -34,6 +34,7 @@ from .accounts import (
     real_administrator_exists,
     redeem_link,
     register,
+    remove_registration,
     request_password_reset,
     resend_setup,
     resend_verification,
@@ -266,8 +267,9 @@ class PasswordChange(auth_views.PasswordChangeView):
         # deactivation or email change made meanwhile. Lock, recheck, and save only the password.
         loaded = self.request.user
         with transaction.atomic():
-            employee = Employee.objects.select_for_update().get(pk=loaded.pk)
-            if not employee.is_active or employee.session_version != loaded.session_version:
+            employee = Employee.objects.select_for_update().filter(pk=loaded.pk).first()
+            # Removed meanwhile (an unconfirmed registration), deactivated, or signed out elsewhere.
+            if employee is None or not employee.is_active or employee.session_version != loaded.session_version:
                 logout(self.request)
                 return redirect_to_login(self.request.get_full_path())
             employee.set_password(form.cleaned_data["new_password1"])
@@ -302,6 +304,9 @@ def account_admin(request):
                 employee = resend_verification_for(actor=request.employee,
                                                    employee_id=request.POST.get("employee_id"))
                 request.session["account_resend"] = {"link": "confirmation", "employee_id": str(employee.pk)}
+            elif action == "remove":
+                remove_registration(actor=request.employee, employee_id=request.POST.get("employee_id"))
+                request.session["account_notice"] = "Registration removed."
             else:
                 error = AccountInputError("Choose an action.")
         except AccountInputError as exc:
@@ -318,6 +323,8 @@ def account_admin(request):
 
 def _resend_notice(request):
     """Report a resend by its recorded outcome. The send has finished by the next page view; the request can't tell."""
+    if notice := request.session.pop("account_notice", ""):
+        return notice, False
     resend = request.session.pop("account_resend", None)
     employee = resend and Employee.objects.filter(pk=resend["employee_id"]).first()
     if not employee:

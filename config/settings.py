@@ -116,6 +116,8 @@ ACCOUNT_RATE_LIMITS = {
 # Address blocks and trusted devices; see docs/plans/33-sign-in-attack-protection.md.
 ADDRESS_BLOCK_HOURS = 24
 TRUSTED_DEVICE_DAYS = 90
+# Unconfirmed registrations are removed this long after their newest confirmation email (plan 35).
+UNCONFIRMED_REGISTRATION_DAYS = 7
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
