@@ -65,6 +65,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {"staticfiles": {"BACKEND": "config.storage.VersionedStaticFilesStorage"}}
+# Tests render pages through the static manifest, so the runner builds it first.
+TEST_RUNNER = "config.test_runner.StaticBuildingRunner"
 
 # Production mail goes through Microsoft Graph (ADR-0011); local development keeps the in-memory sink.
 GRAPH_EMAIL_BACKEND = "training.mail.GraphEmailBackend"

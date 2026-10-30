@@ -109,7 +109,7 @@ For a quick local test run without PostgreSQL, the Django test suite can use an 
 DATABASE_URL=sqlite:///:memory: DJANGO_DEBUG=1 DEV_AUTH_STUB=1 .venv/bin/python manage.py test training
 ```
 
-PostgreSQL-specific locking tests may be skipped on SQLite. `collectstatic` writes assets to the ignored `staticfiles/` directory. Before rollout, run the full suite and concurrency checks on the target PostgreSQL environment and complete the [release criteria](implementation-plan.md#mvp-release-criteria).
+PostgreSQL-specific locking tests may be skipped on SQLite. `collectstatic` writes assets to the ignored `staticfiles/` directory; `manage.py test` runs it first, because tests render pages through the static manifest. Before rollout, run the full suite and concurrency checks on the target PostgreSQL environment and complete the [release criteria](implementation-plan.md#mvp-release-criteria).
 
 ## Training draft import cleanup
 

@@ -22,7 +22,7 @@ With a local PostgreSQL database and environment configured as in [README.md](RE
 - `.venv/bin/python manage.py check` checks Django configuration.
 - `.venv/bin/python manage.py runserver` starts the local server.
 - `.venv/bin/python manage.py dispatch_notifications --loop` runs the notification worker separately: the local sink with the demo stub, or Microsoft Graph when it's configured ([ADR-0011](docs/adr/0011-email-through-microsoft-graph.md)).
-- `.venv/bin/python manage.py test` runs the Django tests. Settings load only when `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1` and `DATABASE_URL` are exported; `./scripts/test-local.sh` sets them and runs the full check, test, and static build on PostgreSQL.
+- `.venv/bin/python manage.py test` runs the Django tests. Settings load only when `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1` and `DATABASE_URL` are exported; `./scripts/test-local.sh` sets them and runs the full check, test, and static build on PostgreSQL. The test runner builds static files first, so a fresh checkout needs no separate `collectstatic`.
 - `npm ci`, `npm run build:editor`, and `npm test` install editor dependencies, rebuild the checked-in document editor bundle, and run the JavaScript tests in `training/js_tests/`. See [document authoring](docs/local-development.md#document-authoring).
 - `.venv/bin/python manage.py collectstatic --noinput` builds static assets.
 
