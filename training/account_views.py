@@ -115,7 +115,11 @@ class SignInView(auth_views.LoginView):
         return super().form_invalid(form)
 
     def form_valid(self, form):
-        response = super().form_valid(form)
+        # Hold the row while signing in, so removing an unconfirmed registration can't delete it halfway.
+        with transaction.atomic():
+            if not Employee.objects.select_for_update().filter(pk=form.get_user().pk).exists():
+                return redirect("sign_in")
+            response = super().form_valid(form)
         # A real session replaces any demo choice.
         self.request.session.pop("demo_employee_id", None)
         return set_trusted_device(self.request, mark_real_session(response), form.get_user())

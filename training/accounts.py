@@ -1,5 +1,6 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
 import logging
+import uuid
 import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -428,6 +429,8 @@ def _delete_registration(employee_id, *, kind, actor=None, sent_before=None, now
     Waits for any account email being sent to it, then rechecks under the row lock, so a confirmation,
     a decision or a resend that happens first always wins. Raises ProtectedError if records refer to it.
     """
+    # The canonical spelling, so the lock key matches the one send_account_email takes for this employee.
+    employee_id = uuid.UUID(str(employee_id))
     with _account_email_lock(employee_id), transaction.atomic():
         employee = Employee.objects.select_for_update().filter(pk=employee_id).first()
         if employee is None or not awaiting_verification().filter(pk=employee.pk).exists():
@@ -454,13 +457,18 @@ def remove_registration(*, actor, employee_id):
 
 
 def expire_registrations(*, now=None, batch=100):
-    """Remove registrations still unconfirmed a set time after their newest confirmation email."""
+    """Remove up to batch registrations still unconfirmed a set time after their newest confirmation email.
+
+    Protected rows are skipped without counting, so they can't hold back the expired rows behind them.
+    """
     now = now or timezone.now()
     cutoff = now - timedelta(days=settings.UNCONFIRMED_REGISTRATION_DAYS)
     candidates = (awaiting_verification().alias(sent=Coalesce("verification_sent_at", "created_at"))
-                  .filter(sent__lte=cutoff).values_list("pk", flat=True)[:batch])
+                  .filter(sent__lte=cutoff).values_list("pk", flat=True))
     removed = 0
     for employee_id in list(candidates):
+        if removed >= batch:
+            break
         try:
             removed += _delete_registration(employee_id, kind=SecurityEvent.Kind.REGISTRATION_EXPIRED,
                                             sent_before=cutoff, now=now)

@@ -1,5 +1,6 @@
 import threading
 import time
+from contextlib import contextmanager
 from datetime import timedelta
 from io import StringIO
 from unittest import mock, skipUnless
@@ -15,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .account_views import PasswordChange
-from .accounts import (AccountInputError, _account_email_lock, expire_registrations, registration_digest,
+from .accounts import (AccountInputError, EmployeeBackend, _account_email_lock, expire_registrations, registration_digest,
                        remove_registration, request_password_reset, resend_verification_for, verify_email,
                        verification_tokens)
 from .mail import AmbiguousMailError, TransientMailError
@@ -129,6 +130,33 @@ class RegistrationRemovalTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response["Location"].startswith(reverse("sign_in")))
 
+    def test_a_sign_in_that_races_a_removal_doesnt_crash(self):
+        applicant = unconfirmed_applicant("applicant@example.com")
+        authenticate = EmployeeBackend.authenticate
+
+        def removed_after_password_check(backend, *args, **kwargs):
+            employee = authenticate(backend, *args, **kwargs)
+            remove_registration(actor=self.admin, employee_id=applicant.pk)
+            return employee
+
+        with mock.patch.object(EmployeeBackend, "authenticate", removed_after_password_check):
+            response = self.sign_in("applicant@example.com")
+        self.assertRedirects(response, reverse("sign_in"), fetch_redirect_response=False)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_any_spelling_of_the_id_waits_on_the_same_email_lock(self):
+        applicant = unconfirmed_applicant("applicant@example.com")
+        locked = []
+
+        @contextmanager
+        def recording_lock(employee_id):
+            locked.append(employee_id)
+            yield
+
+        with mock.patch("training.accounts._account_email_lock", recording_lock):
+            remove_registration(actor=self.admin, employee_id=str(applicant.pk).upper().replace("-", ""))
+        self.assertEqual([str(key) for key in locked], [str(applicant.pk)])
+
     def test_a_confirmation_email_for_a_removed_registration_is_dropped(self):
         applicant = unconfirmed_applicant("applicant@example.com")
         with self.captureOnCommitCallbacks() as callbacks:
@@ -194,6 +222,14 @@ class RegistrationExpiryTests(TestCase):
         Employee.objects.filter(pk__in=[confirmed.pk, invited.pk]).update(created_at=self.now - 30 * DAY)
         expire_registrations(now=self.now + 30 * DAY)
         self.assertEqual(Employee.objects.filter(pk__in=[confirmed.pk, invited.pk]).count(), 2)
+
+    def test_protected_registrations_dont_hold_back_the_rest(self):
+        newer = unconfirmed_applicant("newer@example.com")
+        sent_at(newer, self.now + DAY)
+        SecurityEvent.objects.create(kind=SecurityEvent.Kind.PASSKEYS_COMMAND, employee=self.applicant,
+                                     occurred_at=self.now)
+        self.assertEqual(expire_registrations(now=self.now + 8 * DAY, batch=1), 1)
+        self.assertFalse(Employee.objects.filter(pk=newer.pk).exists())
 
     def test_a_registration_other_records_refer_to_is_kept_and_the_rest_expire(self):
         other = unconfirmed_applicant("other@example.com")
