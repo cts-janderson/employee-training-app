@@ -15,4 +15,7 @@ class Command(BaseCommand):
         employee = Employee.objects.filter(email__iexact=normalize_email(options["email"]), is_demo=False).first()
         if employee is None:
             raise CommandError("No employee uses that email.")
+        # Only administrators get passkeys. A former administrator may still hold some to clean up.
+        if employee.role != Employee.Role.ADMINISTRATOR and not employee.passkeys.exists():
+            raise CommandError("Only administrators have passkeys, and this employee has none.")
         self.stdout.write(f"Removed {remove_all(employee)} passkey(s) for {employee.email}.")

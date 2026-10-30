@@ -1,0 +1,9 @@
+<div class="section-heading"><h2>{{ title }}</h2><span class="section-count">{{ section.total }}{% if count_label %} {{ count_label }}{% endif %}</span></div>
+<div class="collection-panel">
+{% for item in section.items %}
+  {% include row_template %}
+{% empty %}
+  <p class="empty-state">{{ empty }}</p>
+{% endfor %}
+</div>
+{% if section.more %}<p class="see-all"><a href="{{ see_all_url }}">See all {{ section.total }} <span class="visually-hidden">{{ title|lower }}</span></a></p>{% endif %}

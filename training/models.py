@@ -37,6 +37,8 @@ class Employee(AbstractBaseUser):
     session_version = models.PositiveIntegerField(default=0)
     # Set when the last verification, setup or reset email couldn't be sent; cleared by the next success.
     link_send_failed_at = models.DateTimeField(null=True, blank=True)
+    # When the newest confirmation email was issued; an unconfirmed registration expires a set time after it.
+    verification_sent_at = models.DateTimeField(null=True, blank=True)
     # The opaque WebAuthn user handle for passkeys; never the email. Set when the first passkey is added.
     webauthn_user_handle = models.BinaryField(max_length=32, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -847,7 +849,7 @@ class AddressBlock(models.Model):
 
 
 class SecurityEvent(models.Model):
-    """A record of address blocks and passkey changes, including those made from the host."""
+    """A record of address blocks, passkey changes and removed registrations, including host actions."""
     class Kind(models.TextChoices):
         BLOCK_CREATED = "block_created", "Address blocked"
         BLOCK_LIFTED = "block_lifted", "Block lifted"
@@ -857,6 +859,8 @@ class SecurityEvent(models.Model):
         PASSKEY_ADDED = "passkey_added", "Passkey added"
         PASSKEY_REMOVED = "passkey_removed", "Passkey removed"
         PASSKEYS_COMMAND = "passkeys_command", "Passkeys removed from the host"
+        REGISTRATION_REMOVED = "registration_removed", "Unconfirmed registration removed"
+        REGISTRATION_EXPIRED = "registration_expired", "Unconfirmed registration expired"
 
     kind = models.CharField(max_length=20, choices=Kind.choices)
     employee = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True,

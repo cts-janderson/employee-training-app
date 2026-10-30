@@ -199,12 +199,13 @@ def make_permanent(block_id, *, actor, now=None):
 
 
 def blocks_overview(*, now=None):
+    """Full querysets, newest first with a stable order; pages and previews take their own slices."""
     now = now or timezone.now()
     return {
-        "active_blocks": AddressBlock.objects.filter(_open(now)).order_by("-created_at"),
+        "active_blocks": AddressBlock.objects.filter(_open(now)).order_by("-created_at", "-pk"),
         "ended_blocks": AddressBlock.objects.filter(~_open(now)).select_related("ended_by")
-                        .order_by(Coalesce("ended_at", "expires_at").desc())[:20],
-        "events": SecurityEvent.objects.select_related("actor", "employee").order_by("-occurred_at")[:50],
+                        .order_by(Coalesce("ended_at", "expires_at").desc(), "-pk"),
+        "events": SecurityEvent.objects.select_related("actor", "employee").order_by("-occurred_at", "-pk"),
     }
 
 

@@ -5,14 +5,14 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 from django.utils import timezone
 
-from training.accounts import prune_rate_limits
+from training.accounts import expire_registrations, prune_rate_limits
 from training.passkeys import prune_challenges
 from training.models import ImportBatch
 
 
 class Command(BaseCommand):
     help = ("Delete expired import reviews and committed results older than seven days; keep created trainings. "
-            "Also delete ended rate-limit counters and expired passkey challenges.")
+            "Also delete ended rate-limit counters, expired passkey challenges and expired unconfirmed registrations.")
 
     def add_arguments(self, parser):
         parser.add_argument("--loop", action="store_true", help="Run every minute alongside the local server.")
@@ -26,8 +26,10 @@ class Command(BaseCommand):
             ).delete()
             counters = prune_rate_limits(now=now)
             prune_challenges(now=now)
-            if count or counters or not options["loop"]:
-                self.stdout.write(f"Removed {count} expired import records and {counters} rate-limit counters.")
+            registrations = expire_registrations(now=now)
+            if count or counters or registrations or not options["loop"]:
+                self.stdout.write(f"Removed {count} expired import records, {counters} rate-limit counters and "
+                                  f"{registrations} expired registrations.")
             if not options["loop"]:
                 return
             try:

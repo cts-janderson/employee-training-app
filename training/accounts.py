@@ -1,5 +1,6 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
 import logging
+import uuid
 import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -13,6 +14,8 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, connection, transaction
+from django.db.models import F, ProtectedError, Q
+from django.db.models.functions import Coalesce, Lower
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -21,7 +24,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from .mail import PermanentMailError, TransientMailError
-from .models import Employee, RateLimitCounter
+from .models import Employee, RateLimitCounter, SecurityEvent
 
 logger = logging.getLogger("training.accounts")
 
@@ -208,11 +211,18 @@ def send_account_email(employee, purpose):
             sending = False
             try:
                 with transaction.atomic():
-                    current = Employee.objects.select_for_update().get(pk=employee.pk)
-                    previous = current.link_generation
+                    current = Employee.objects.select_for_update().filter(pk=employee.pk).first()
+                    if current is None:
+                        return  # The registration was removed meanwhile, so there's nobody to email.
+                    previous, previous_sent = current.link_generation, current.verification_sent_at
                     if route:
                         current.link_generation = previous + 1
-                        current.save(update_fields=["link_generation"])
+                        fields = ["link_generation"]
+                        if purpose == "verify":
+                            # Only confirmation emails restart an unconfirmed registration's expiry.
+                            current.verification_sent_at = timezone.now()
+                            fields.append("verification_sent_at")
+                        current.save(update_fields=fields)
                 issued = current.link_generation
                 link = _link(route, current, tokens) if route else settings.APP_BASE_URL + reverse("sign_in")
                 body = render_to_string(f"training/email/{purpose}.txt", {"employee": current, "link": link})
@@ -225,13 +235,17 @@ def send_account_email(employee, purpose):
                     # Only while this send's link is still the newest: a deactivation meanwhile must win.
                     newest = Employee.objects.filter(pk=employee.pk, link_generation=issued)
                     if not sending or isinstance(exc, (TransientMailError, PermanentMailError)):
-                        # Certainly not delivered: the earlier link works again.
-                        newest.update(link_generation=previous, link_send_failed_at=timezone.now())
+                        # Certainly not delivered: the earlier link and expiry time apply again.
+                        restored = {"link_generation": previous}
+                        if purpose == "verify":
+                            restored["verification_sent_at"] = previous_sent
+                        newest.update(**restored, link_send_failed_at=timezone.now())
                     else:
                         # Ambiguous or unknown: the email may have arrived, so its link must keep working.
                         newest.update(link_send_failed_at=timezone.now())
-                employee.link_generation = Employee.objects.values_list("link_generation", flat=True).get(
-                    pk=employee.pk)
+                generation = Employee.objects.filter(pk=employee.pk).values_list("link_generation", flat=True).first()
+                if generation is not None:
+                    employee.link_generation = generation
                 return
             if route:
                 Employee.objects.filter(pk=employee.pk, link_generation=issued).update(link_send_failed_at=None)
@@ -316,16 +330,26 @@ def request_password_reset(email):
 
 
 def pending_applications():
-    return [employee for employee in Employee.objects.filter(
+    """Verified registrations waiting for a decision, longest-waiting first."""
+    return with_verification(Employee.objects.filter(
         is_demo=False, approval_status=Employee.Approval.PENDING,
-    ).exclude(verified_email="").order_by("created_at", "id") if employee.email_is_verified]
+    )).filter(VERIFIED).order_by("created_at", "id")
+
+
+def with_verification(queryset):
+    """Adds the lowercased emails that VERIFIED compares, matching Employee.email_is_verified in SQL."""
+    return queryset.alias(verified_email_lower=Lower("verified_email"), email_lower=Lower("email"))
+
+
+VERIFIED = ~Q(verified_email="") & Q(verified_email_lower=F("email_lower"))
 
 
 def awaiting_verification():
-    """Registrations that haven't confirmed their email, so they can't join the approval queue yet."""
-    return [employee for employee in Employee.objects.filter(
+    """Registrations that haven't confirmed their email or been decided, so an administrator may remove them."""
+    return with_verification(Employee.objects.filter(
         is_demo=False, is_active=True, approval_status=Employee.Approval.PENDING,
-    ).order_by("created_at", "id") if not employee.email_is_verified]
+        approval_decided_at__isnull=True, approval_decided_by__isnull=True,
+    )).exclude(VERIFIED).order_by("created_at", "id")
 
 
 def real_administrator_exists():
@@ -336,7 +360,13 @@ def awaiting_setup():
     return Employee.objects.filter(
         is_demo=False, approval_status=Employee.Approval.APPROVED, is_active=True,
         password__startswith=UNUSABLE_PASSWORD_PREFIX,
-    ).order_by("name", "id")
+    ).order_by("created_at", "id")
+
+
+def decided_accounts():
+    """Real employees with an approval decision, newest first. An invitation counts as an approval."""
+    return Employee.objects.filter(is_demo=False, approval_decided_at__isnull=False).select_related(
+        "approval_decided_by").order_by("-approval_decided_at", "-id")
 
 
 def _require_administrator(actor):
@@ -383,13 +413,74 @@ def invite_employee(*, actor, name, email, now=None):
 def resend_verification_for(*, actor, employee_id):
     """Send an applicant a new verify link. Shares the applicant's own resend limit, so the two can't add up."""
     _require_administrator(actor)
-    employee = next((employee for employee in awaiting_verification() if str(employee.pk) == str(employee_id)), None)
+    try:
+        employee = awaiting_verification().filter(pk=employee_id).first()
+    except (ValidationError, ValueError):
+        employee = None
     if employee is None:
         raise AccountInputError("This applicant has already confirmed their email address.")
     if rate_limited("account_email", f"verify:{employee.pk}"):
         raise AccountInputError("A link was sent to this applicant recently. Try again later.")
     send_account_email(employee, "verify")
     return employee
+
+
+def registration_digest(email):
+    """A keyed digest of an email, so a removed registration can be matched to an address without storing it."""
+    return salted_hmac("training.registration_removed", normalize_email(email), algorithm="sha256").hexdigest()
+
+
+def _delete_registration(employee_id, *, kind, actor=None, sent_before=None, now=None):
+    """Delete an unconfirmed registration and record it. False when it's gone or no longer removable.
+
+    Waits for any account email being sent to it, then rechecks under the row lock, so a confirmation,
+    a decision or a resend that happens first always wins. Raises ProtectedError if records refer to it.
+    """
+    # The canonical spelling, so the lock key matches the one send_account_email takes for this employee.
+    employee_id = uuid.UUID(str(employee_id))
+    with _account_email_lock(employee_id), transaction.atomic():
+        employee = Employee.objects.select_for_update().filter(pk=employee_id).first()
+        if employee is None or not awaiting_verification().filter(pk=employee.pk).exists():
+            return False
+        if sent_before is not None and (employee.verification_sent_at or employee.created_at) > sent_before:
+            return False
+        detail = (f"Registration {employee.pk} from {employee.created_at:%Y-%m-%d}; "
+                  f"email digest {registration_digest(employee.email)}")
+        employee.delete()
+        SecurityEvent.objects.create(kind=kind, actor=actor, detail=detail, occurred_at=now or timezone.now())
+        return True
+
+
+def remove_registration(*, actor, employee_id):
+    _require_administrator(actor)
+    try:
+        removed = _delete_registration(employee_id, kind=SecurityEvent.Kind.REGISTRATION_REMOVED, actor=actor)
+    except (ValidationError, ValueError):
+        removed = False
+    except ProtectedError:
+        raise AccountInputError("Other records refer to this registration, so it can't be removed.") from None
+    if not removed:
+        raise AccountInputError("This registration has already been confirmed or removed.")
+
+
+def expire_registrations(*, now=None, batch=100):
+    """Remove up to batch registrations still unconfirmed a set time after their newest confirmation email.
+
+    Registrations a security event refers to (the one record that can) are left out, so they can't fill
+    every batch and hold back the rest. Any other reference is logged and skipped within the batch.
+    """
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=settings.UNCONFIRMED_REGISTRATION_DAYS)
+    candidates = (awaiting_verification().alias(sent=Coalesce("verification_sent_at", "created_at"))
+                  .filter(sent__lte=cutoff, security_events__isnull=True).values_list("pk", flat=True)[:batch])
+    removed = 0
+    for employee_id in list(candidates):
+        try:
+            removed += _delete_registration(employee_id, kind=SecurityEvent.Kind.REGISTRATION_EXPIRED,
+                                            sent_before=cutoff, now=now)
+        except ProtectedError:
+            logger.warning("Kept expired registration %s because other records refer to it", employee_id)
+    return removed
 
 
 def resend_setup(*, actor, employee_id):

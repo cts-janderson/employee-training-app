@@ -23,6 +23,7 @@ from .accounts import (
     account_state,
     awaiting_setup,
     awaiting_verification,
+    decided_accounts,
     decide_application,
     invite_employee,
     is_account_administrator,
@@ -34,6 +35,7 @@ from .accounts import (
     real_administrator_exists,
     redeem_link,
     register,
+    remove_registration,
     request_password_reset,
     resend_setup,
     resend_verification,
@@ -43,6 +45,7 @@ from .accounts import (
     verification_tokens,
     verify_email,
 )
+from .browsing import browse, preview, safe_return_to
 from .dev_auth import (account_admin_required, admin_required, clear_real_session, demo_enabled,
                        demo_environment_required, mark_real_session)
 from .models import Employee
@@ -114,7 +117,11 @@ class SignInView(auth_views.LoginView):
         return super().form_invalid(form)
 
     def form_valid(self, form):
-        response = super().form_valid(form)
+        # Hold the row while signing in, so removing an unconfirmed registration can't delete it halfway.
+        with transaction.atomic():
+            if not Employee.objects.select_for_update().filter(pk=form.get_user().pk).exists():
+                return redirect("sign_in")
+            response = super().form_valid(form)
         # A real session replaces any demo choice.
         self.request.session.pop("demo_employee_id", None)
         return set_trusted_device(self.request, mark_real_session(response), form.get_user())
@@ -266,8 +273,9 @@ class PasswordChange(auth_views.PasswordChangeView):
         # deactivation or email change made meanwhile. Lock, recheck, and save only the password.
         loaded = self.request.user
         with transaction.atomic():
-            employee = Employee.objects.select_for_update().get(pk=loaded.pk)
-            if not employee.is_active or employee.session_version != loaded.session_version:
+            employee = Employee.objects.select_for_update().filter(pk=loaded.pk).first()
+            # Removed meanwhile (an unconfirmed registration), deactivated, or signed out elsewhere.
+            if employee is None or not employee.is_active or employee.session_version != loaded.session_version:
                 logout(self.request)
                 return redirect_to_login(self.request.get_full_path())
             employee.set_password(form.cleaned_data["new_password1"])
@@ -302,10 +310,18 @@ def account_admin(request):
                 employee = resend_verification_for(actor=request.employee,
                                                    employee_id=request.POST.get("employee_id"))
                 request.session["account_resend"] = {"link": "confirmation", "employee_id": str(employee.pk)}
+            elif action == "remove":
+                remove_registration(actor=request.employee, employee_id=request.POST.get("employee_id"))
+                request.session["account_notice"] = "Registration removed."
             else:
                 error = AccountInputError("Choose an action.")
         except AccountInputError as exc:
             error = exc
+        if "return_to" in request.GET:
+            # Acting from All accounts: go back to the same filter, search and page, with any error.
+            if error:
+                request.session["account_error"] = str(error)
+            return redirect(safe_return_to(request, "account_list"))
         if not error:
             return redirect("account_admin")
     notice, notice_failed = _resend_notice(request)
@@ -318,6 +334,8 @@ def account_admin(request):
 
 def _resend_notice(request):
     """Report a resend by its recorded outcome. The send has finished by the next page view; the request can't tell."""
+    if notice := request.session.pop("account_notice", ""):
+        return notice, False
     resend = request.session.pop("account_resend", None)
     employee = resend and Employee.objects.filter(pk=resend["employee_id"]).first()
     if not employee:
@@ -329,13 +347,36 @@ def _resend_notice(request):
 
 def _admin_context(**extra):
     return {
-        "applications": pending_applications(),
-        "unconfirmed": awaiting_verification(),
-        "invited": awaiting_setup(),
-        "recent": Employee.objects.filter(is_demo=False, approval_decided_at__isnull=False)
-                  .select_related("approval_decided_by").order_by("-approval_decided_at")[:20],
+        "applications": preview(pending_applications(), "queue"),
+        "unconfirmed": preview(awaiting_verification(), "queue"),
+        "invited": preview(awaiting_setup(), "queue"),
+        "recent": preview(decided_accounts(), "log"),
         **extra,
     }
+
+
+# The All accounts filters: each is one section of Accounts, with its row actions.
+ACCOUNT_LISTS = {
+    "applications": ("Applications", pending_applications),
+    "unconfirmed": ("Waiting for email confirmation", awaiting_verification),
+    "setup": ("Waiting for setup", awaiting_setup),
+    "decided": ("Decisions", decided_accounts),
+}
+
+
+@account_admin_required
+def account_list(request):
+    status = request.GET.get("status")
+    if status not in ACCOUNT_LISTS:
+        status = "applications"
+    label, query = ACCOUNT_LISTS[status]
+    listing = browse(request, query(), search_fields=["name", "email"], extra_params={"status": status})
+    notice, notice_failed = _resend_notice(request)
+    return render(request, "training/account_list.html", {
+        "browse": listing, "status": status, "label": label, "browse_label": "accounts",
+        "statuses": [(key, name) for key, (name, _query) in ACCOUNT_LISTS.items()],
+        "notice": notice, "notice_failed": notice_failed, "error": request.session.pop("account_error", ""),
+    })
 
 
 @admin_required
@@ -372,7 +413,35 @@ def address_blocks(request):
             notice = "Block made permanent."
         else:
             notice = "That block has already ended."
+        if "return_to" in request.GET:
+            request.session["blocks_notice"] = notice
+            return redirect(safe_return_to(request, "address_block_list"))
+    overview = blocks_overview()
     return render(request, "training/address_blocks.html", {
-        **blocks_overview(), "notice": notice, "org_time_zone": settings.ORG_TIME_ZONE,
-        "block_hours": settings.ADDRESS_BLOCK_HOURS,
+        "active_blocks": preview(overview["active_blocks"], "log"),
+        "ended_blocks": preview(overview["ended_blocks"], "log"),
+        "events": preview(overview["events"], "log"),
+        "notice": notice, "org_time_zone": settings.ORG_TIME_ZONE, "block_hours": settings.ADDRESS_BLOCK_HOURS,
+    })
+
+
+# The full lists behind each Blocked addresses section, with what search looks in.
+BLOCK_LISTS = {
+    "active": ("Active blocks", "active_blocks", ["network"]),
+    "ended": ("Ended blocks", "ended_blocks", ["network"]),
+    "events": ("Security events", "events", ["network", "detail"]),
+}
+
+
+@account_admin_required
+def address_block_list(request):
+    show = request.GET.get("show")
+    if show not in BLOCK_LISTS:
+        show = "active"
+    label, key, search_fields = BLOCK_LISTS[show]
+    listing = browse(request, blocks_overview()[key], search_fields=search_fields, extra_params={"show": show})
+    return render(request, "training/address_block_list.html", {
+        "browse": listing, "show": show, "label": label, "browse_label": label.lower(),
+        "shows": [(name, title) for name, (title, _key, _fields) in BLOCK_LISTS.items()],
+        "notice": request.session.pop("blocks_notice", ""), "org_time_zone": settings.ORG_TIME_ZONE,
     })

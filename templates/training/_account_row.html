@@ -1,0 +1,28 @@
+{% with employee=item %}
+<article class="collection-row employee-row">
+  <span class="person-avatar" aria-hidden="true">{{ employee.name|first|upper|default:"?" }}</span>
+  <div class="record-main"><h3>{{ employee.name }}</h3><p class="record-subtitle">{{ employee.email }}{% if row_kind == "decided" %} · {{ employee.get_approval_status_display|lower }}{% if employee.approval_decided_by %} by {{ employee.approval_decided_by.name }}{% endif %} {{ employee.approval_decided_at|date:"M j, Y" }}{% elif row_kind != "setup" %} · registered {{ employee.created_at|date:"M j, Y" }}{% endif %}</p></div>
+  {% if row_kind == "unconfirmed" or row_kind == "setup" %}{% if employee.link_send_failed_at %}<span class="record-status"><span class="badge amber">Email not sent</span></span>{% endif %}{% endif %}
+  {% if row_kind == "applications" %}
+    <form method="post" class="actions" {% if action_url %}action="{{ action_url }}"{% endif %}>
+      {% csrf_token %}<input type="hidden" name="employee_id" value="{{ employee.id }}">
+      <button type="submit" name="action" value="approve">Approve</button>
+      <button type="submit" name="action" value="reject">Reject</button>
+    </form>
+  {% elif row_kind == "unconfirmed" %}
+    <div class="actions">
+      <form method="post" {% if action_url %}action="{{ action_url }}"{% endif %}>{% csrf_token %}<input type="hidden" name="employee_id" value="{{ employee.id }}"><button type="submit" name="action" value="resend_verification">Resend link</button></form>
+      <details class="confirm-remove">
+        <summary class="button secondary">Remove</summary>
+        <form method="post" class="confirm-remove-panel" {% if action_url %}action="{{ action_url }}"{% endif %}>
+          {% csrf_token %}<input type="hidden" name="employee_id" value="{{ employee.id }}">
+          <p>Remove this registration? They can register again with the same email.</p>
+          <button type="submit" name="action" value="remove" class="danger">Remove registration</button>
+        </form>
+      </details>
+    </div>
+  {% elif row_kind == "setup" %}
+    <form method="post" {% if action_url %}action="{{ action_url }}"{% endif %}>{% csrf_token %}<input type="hidden" name="employee_id" value="{{ employee.id }}"><button type="submit" name="action" value="resend_setup">Resend setup link</button></form>
+  {% endif %}
+</article>
+{% endwith %}

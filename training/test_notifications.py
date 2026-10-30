@@ -309,6 +309,26 @@ class NotificationWorkflowTests(NotificationFixtures, TestCase):
         response = self.client.get(reverse("notification_log"), {"q": "Nobody"})
         self.assertContains(response, "No notifications found")
 
+    def test_notification_log_pages_with_filters_and_a_stable_order(self):
+        self.assign([self.alice])
+        # Thirty copies of one notification as manual nudges, all created at the same moment.
+        nudge = Notification.objects.first()
+        Notification.objects.all().delete()
+        nudge.kind, nudge.requested_by, nudge.requested_at = Notification.Kind.MANUAL_NUDGE, self.admin, self.now
+        for _ in range(30):
+            nudge.pk = uuid.uuid4()
+            nudge.save(force_insert=True)
+        Notification.objects.update(created_at=self.now)
+        filters = {"kind": "manual_nudge", "status": "all", "q": "Alice"}
+        first = self.client.get(reverse("notification_log"), filters)
+        second = self.client.get(reverse("notification_log"), {**filters, "page": 2})
+        self.assertEqual((len(first.context["notification_rows"]), len(second.context["notification_rows"])), (25, 5))
+        seen = [row["item"].id for response in (first, second) for row in response.context["notification_rows"]]
+        self.assertEqual(len(set(seen)), 30)
+        self.assertEqual(first.context["counts"]["total"], 30)
+        self.assertContains(first, "page=2")
+        self.assertContains(first, "kind=manual_nudge")
+
 
 @override_settings(DEBUG=True, DEV_AUTH_STUB=True, DEV_ADMIN_EMAIL="demo.admin@example.test",
                    ORG_TIME_ZONE="America/New_York", APP_BASE_URL="http://127.0.0.1:8000")

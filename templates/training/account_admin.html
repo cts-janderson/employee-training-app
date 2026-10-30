@@ -1,7 +1,7 @@
 {% extends "training/base.html" %}
 {% block title %}Accounts · Employee Training{% endblock %}
 {% block content %}
-  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Accounts</h1><p class="muted">Review applications and invite employees to sign in.</p></div><a class="button secondary" href="{% url 'address_blocks' %}">Blocked addresses</a></div>
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Accounts</h1><p class="muted">Review applications and invite employees to sign in.</p></div><div class="actions"><a class="button secondary" href="{% url 'account_list' %}">All accounts</a><a class="button secondary" href="{% url 'address_blocks' %}">Blocked addresses</a></div></div>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   {% if notice %}<p {% if notice_failed %}class="error" role="alert"{% else %}role="status"{% endif %}>{{ notice }}</p>{% endif %}
   <form class="card employee-form" method="post">
@@ -14,50 +14,8 @@
       <div class="employee-form-action"><button type="submit">Send invitation</button></div>
     </div>
   </form>
-  <div class="section-heading"><h2>Applications</h2><span class="section-count">{{ applications|length }} waiting</span></div>
-  <div class="collection-panel">
-  {% for applicant in applications %}
-    <article class="collection-row employee-row">
-      <span class="person-avatar" aria-hidden="true">{{ applicant.name|first|upper|default:"?" }}</span>
-      <div class="record-main"><h3>{{ applicant.name }}</h3><p class="record-subtitle">{{ applicant.email }} · registered {{ applicant.created_at|date:"M j, Y" }}</p></div>
-      <form method="post" class="actions">
-        {% csrf_token %}<input type="hidden" name="employee_id" value="{{ applicant.id }}">
-        <button type="submit" name="action" value="approve">Approve</button>
-        <button type="submit" name="action" value="reject">Reject</button>
-      </form>
-    </article>
-  {% empty %}
-    <p class="empty-state">No applications are waiting.</p>
-  {% endfor %}
-  </div>
-  <div class="section-heading"><h2>Waiting for email confirmation</h2><span class="section-count">{{ unconfirmed|length }} waiting</span></div>
-  <div class="collection-panel">
-  {% for applicant in unconfirmed %}
-    <article class="collection-row employee-row">
-      <span class="person-avatar" aria-hidden="true">{{ applicant.name|first|upper|default:"?" }}</span>
-      <div class="record-main"><h3>{{ applicant.name }}</h3><p class="record-subtitle">{{ applicant.email }} · registered {{ applicant.created_at|date:"M j, Y" }}</p></div>
-      {% if applicant.link_send_failed_at %}<span class="record-status"><span class="badge amber">Email not sent</span></span>{% endif %}
-      <form method="post">{% csrf_token %}<input type="hidden" name="employee_id" value="{{ applicant.id }}"><button type="submit" name="action" value="resend_verification">Resend link</button></form>
-    </article>
-  {% empty %}
-    <p class="empty-state">Every registration has confirmed its email address.</p>
-  {% endfor %}
-  </div>
-  <div class="section-heading"><h2>Waiting for setup</h2></div>
-  <div class="collection-panel">
-  {% for employee in invited %}
-    <article class="collection-row employee-row">
-      <span class="person-avatar" aria-hidden="true">{{ employee.name|first|upper|default:"?" }}</span>
-      <div class="record-main"><h3>{{ employee.name }}</h3><p class="record-subtitle">{{ employee.email }}</p></div>
-      {% if employee.link_send_failed_at %}<span class="record-status"><span class="badge amber">Email not sent</span></span>{% endif %}
-      <form method="post">{% csrf_token %}<input type="hidden" name="employee_id" value="{{ employee.id }}"><button type="submit" name="action" value="resend_setup">Resend setup link</button></form>
-    </article>
-  {% empty %}
-    <p class="empty-state">Everyone invited has set up their account.</p>
-  {% endfor %}
-  </div>
-  <h2>Recent decisions</h2>
-  {% for employee in recent %}
-    <p>{{ employee.approval_decided_at }} · {{ employee.name }} · {{ employee.get_approval_status_display }} by {{ employee.approval_decided_by.name }}</p>
-  {% empty %}<p>No decisions yet.</p>{% endfor %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Applications" section=applications row_template="training/_account_row.html" row_kind="applications" count_label="waiting" empty="No applications are waiting." see_all_url=list_url|add:"?status=applications" %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Waiting for email confirmation" section=unconfirmed row_template="training/_account_row.html" row_kind="unconfirmed" count_label="waiting" empty="Every registration has confirmed its email address." see_all_url=list_url|add:"?status=unconfirmed" %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Waiting for setup" section=invited row_template="training/_account_row.html" row_kind="setup" count_label="waiting" empty="Everyone invited has set up their account." see_all_url=list_url|add:"?status=setup" %}
+  {% url 'account_list' as list_url %}{% include "training/_preview_section.html" with title="Recent decisions" section=recent row_template="training/_account_row.html" row_kind="decided" count_label="in all" empty="No decisions yet." see_all_url=list_url|add:"?status=decided" %}
 {% endblock %}

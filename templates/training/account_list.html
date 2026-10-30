@@ -1,0 +1,22 @@
+{% extends "training/base.html" %}
+{% block title %}All accounts · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>All accounts</h1><p class="muted">Search and act on every application, registration and invitation.</p></div><a class="button secondary" href="{% url 'account_admin' %}">Accounts</a></div>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {% if notice %}<p {% if notice_failed %}class="error" role="alert"{% else %}role="status"{% endif %}>{{ notice }}</p>{% endif %}
+  <nav class="chart-mode-nav" aria-label="Account status">
+    {% for key, name in statuses %}<a href="{% url 'account_list' %}?status={{ key }}" {% if key == status %}aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}
+  </nav>
+  <div class="section-heading"><h2>{{ label }}</h2><span class="section-count">{{ browse.total }} account{{ browse.total|pluralize }}</span></div>
+  {% include "training/_browse_controls.html" %}
+  {% url 'account_admin' as admin_url %}
+  {% with action_url=admin_url|add:"?"|add:browse.return_to_query row_kind=status %}
+  <div class="collection-panel">
+  {% for item in browse.page %}
+    {% include "training/_account_row.html" %}
+  {% empty %}
+    <p class="empty-state">{% if browse.query %}No accounts match that search.{% else %}Nothing here.{% endif %}</p>
+  {% endfor %}
+  </div>
+  {% endwith %}
+{% endblock %}

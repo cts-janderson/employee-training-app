@@ -8,6 +8,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 
 PAGE_SIZE = 25
+# How many rows a summary section shows before linking to its full list.
+PREVIEW_SIZES = {"queue": 5, "log": 10}
 
 
 @dataclass(frozen=True)
@@ -25,12 +27,32 @@ class Browse:
         return self.page_url(self.page.number)
 
     @property
+    def return_to_query(self):
+        """The query string that brings an action on this page back to it."""
+        return urlencode({"return_to": self.return_to()})
+
+    @property
     def previous_url(self):
         return self.page_url(self.page.previous_page_number()) if self.page.has_previous() else ""
 
     @property
     def next_url(self):
         return self.page_url(self.page.next_page_number()) if self.page.has_next() else ""
+
+
+@dataclass(frozen=True)
+class Preview:
+    items: list
+    total: int
+
+    @property
+    def more(self):
+        return self.total > len(self.items)
+
+
+def preview(queryset, kind):
+    """The first rows of a summary section, with the full count for its heading and See all link."""
+    return Preview(list(queryset[:PREVIEW_SIZES[kind]]), queryset.count())
 
 
 def browse(request, queryset, *, search_fields, extra_params=None):
@@ -47,7 +69,8 @@ def browse(request, queryset, *, search_fields, extra_params=None):
 def safe_return_to(request, list_name, *, report_details=False):
     value = request.GET.get("return_to", "")
     prefix = reverse(list_name)
-    if value and url_has_allowed_host_and_scheme(value, allowed_hosts={request.get_host()}):
+    if value and url_has_allowed_host_and_scheme(value, allowed_hosts={request.get_host()},
+                                                 require_https=request.is_secure()):
         path = urlsplit(value).path
         if path == prefix:
             return value

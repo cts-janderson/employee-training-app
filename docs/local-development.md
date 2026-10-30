@@ -46,17 +46,17 @@ Sign-in, registration, approval, invitations and password reset work locally wit
    .venv/bin/python manage.py create_administrator --name "Local Admin" --email admin@example.com
    ```
 
-2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`) and use the other administrator pages with real employees. A demo administrator who opens **Accounts** gets a page (`/accounts/demo/`) explaining how to sign in instead. Real and demo administrators don't see each other's employees, trainings, library quizzes or groups; see [Slice 31](plans/31-real-employee-workflows.md). Apply migration `0017` first. To work with demo data, sign out and use **Switch profile**.
-3. Register a second address at `/account/register/`, open its verify link from **Local outbox** (`/dev/outbox/`, in the sidebar footer) or the `runserver` output, then approve the application from **Accounts**. Until it's confirmed, the registration is listed under **Waiting for email confirmation**, where **Resend link** sends a new one. The sidebar shows how many verified applications are waiting. The outbox lists account emails that this server process sent and empties when it restarts.
+2. Sign in at `/account/sign-in/`. Real administrators manage applications and invitations at **Accounts** (`/accounts/`). Each section there shows its first five rows (ten for **Recent decisions**) and links to **All accounts** (`/accounts/all/`), which filters by status, searches and pages, and returns row actions to the same page. Administrators also use the other administrator pages with real employees. A demo administrator who opens **Accounts** gets a page (`/accounts/demo/`) explaining how to sign in instead. Real and demo administrators don't see each other's employees, trainings, library quizzes or groups; see [Slice 31](plans/31-real-employee-workflows.md). Apply migration `0017` first. To work with demo data, sign out and use **Switch profile**.
+3. Register a second address at `/account/register/`, open its verify link from **Local outbox** (`/dev/outbox/`, in the sidebar footer) or the `runserver` output, then approve the application from **Accounts**. Until it's confirmed, the registration is listed under **Waiting for email confirmation**, where **Resend link** sends a new one. An administrator can remove a registration from that section, and the cleanup loop removes one 7 days after its newest confirmation email (apply migration `0021` first; see [plan 35](plans/35-registration-removal-and-list-previews.md)). The sidebar shows how many verified applications are waiting. The outbox lists account emails that this server process sent and empties when it restarts.
 
-4. Apply migration `0020` first. A network with more than 50 failed sign-ins in 24 hours gets an address block for 24 hours. Lift it on **Blocked addresses** (`/accounts/blocks/`, linked from **Accounts**, and from the sidebar while a block is open) or from the shell. Networks are stored as `127.0.0.1/32`, or as the `/64` of an IPv6 client:
+4. Apply migration `0020` first. A network with more than 50 failed sign-ins in 24 hours gets an address block for 24 hours. Lift it on **Blocked addresses** (`/accounts/blocks/`, linked from **Accounts**, and from the sidebar while a block is open; it previews the newest ten of each section and links to paged lists at `/accounts/blocks/list/`) or from the shell. Networks are stored as `127.0.0.1/32`, or as the `/64` of an IPv6 client:
 
    ```bash
    .venv/bin/python manage.py unblock_address --list
    .venv/bin/python manage.py unblock_address 127.0.0.1
    ```
 
-5. Passkeys need the app opened at `http://localhost:8000` (the default `APP_BASE_URL`), not `127.0.0.1`: WebAuthn refuses an IP address as the site. Add a passkey under **Your account** as a real administrator. In Chrome, DevTools → **WebAuthn** → **Enable virtual authenticator environment** gives a passkey without a physical device. `manage.py remove_passkeys --email …` removes an administrator's passkeys.
+5. Passkeys need the app opened at `http://localhost:8000` (the default `APP_BASE_URL`), not `127.0.0.1`: WebAuthn refuses an IP address as the site. Add a passkey under **Your account** as a real administrator. In Chrome, DevTools → **WebAuthn** → **Enable virtual authenticator environment** gives a passkey without a physical device. `manage.py remove_passkeys --email …` removes an administrator's passkeys. It refuses an employee who isn't an administrator and has no passkeys.
 
 Real accounts can't use the demo switcher, and demo profiles can't sign in with a password.
 
@@ -121,7 +121,7 @@ The normal startup script runs cleanup every minute. If running Django manually,
 DJANGO_DEBUG=1 DEV_AUTH_STUB=1 .venv/bin/python manage.py cleanup_training_imports --loop
 ```
 
-Omit `--loop` for a single cleanup pass. Expired uncommitted reviews and committed result records older than seven days are removed; created trainings remain. Raw uploads are never permanently saved. Configure a scheduled cleanup job before introducing any non-local deployment; the existing real-data gate still applies.
+Omit `--loop` for a single cleanup pass. Expired uncommitted reviews and committed result records older than seven days are removed; created trainings remain. The same pass deletes ended rate-limit counters and expired passkey challenges, and removes unconfirmed registrations 7 days after their newest confirmation email (`UNCONFIRMED_REGISTRATION_DAYS`; needs migration `0021`). Raw uploads are never permanently saved. Configure a scheduled cleanup job before introducing any non-local deployment; the existing real-data gate still applies.
 
 ## Completion reports
 

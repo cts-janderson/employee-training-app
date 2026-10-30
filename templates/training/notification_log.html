@@ -43,8 +43,9 @@
 
   <div class="section-heading notification-list-heading">
     <h2>Notification log</h2>
-    <span class="section-count">{{ notification_rows|length }} result{{ notification_rows|length|pluralize }}</span>
+    <span class="section-count">{{ browse.total }} result{{ browse.total|pluralize }}</span>
   </div>
+  {% include "training/_browse_controls.html" with pagination_only=True %}
   <div class="notification-list" aria-label="Notification log">
     <div class="notification-list-header" aria-hidden="true">
       <span>Message type</span><span>Employee</span><span>Training</span><span>Timing</span><span>Status</span><span>Attempts</span><span>Details</span>
@@ -71,4 +72,5 @@
       <div class="notification-empty"><strong>No notifications found</strong><p>Try a different status, message type, or search term.</p><a href="{% url 'notification_log' %}">Clear filters</a></div>
     {% endfor %}
   </div>
+  {% include "training/_browse_controls.html" with pagination_only=True %}
 {% endblock %}
