@@ -164,4 +164,5 @@ Planned October 30, 2026, and reviewed by Codex.
 - **B** is committed. **Accounts** shows previews through `_account_section.html`, and **All accounts** is `account_list`. Both render rows with `_account_row.html`. **Recent decisions** shows rows instead of plain text lines.
   - Actions taken from **All accounts** report an error on that page through the session, rather than re-rendering **Accounts**, so the filter and page stay as they were.
   - `safe_return_to()` now also requires HTTPS on secure requests, for every page that uses it.
-- **C** and **D** aren't started.
+- **C** is committed in `94fb0f3`. Section partials are shared as `_preview_section.html`, with `_block_row.html` and `_security_event_row.html` for rows. Security events show as rows instead of plain text lines.
+- **D** is committed. **Notifications** pages at 25 through `browse()`, searching employee name and training title, with the page controls above and below the log.
