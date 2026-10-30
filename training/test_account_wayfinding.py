@@ -3,10 +3,13 @@ from datetime import timedelta
 from urllib.parse import urlsplit
 
 from django.core import mail
+from unittest import mock
+
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from .mail import TransientMailError
 from .models import AddressBlock, Employee
 from .accounts import AccountInputError, resend_verification_for
 from .sign_in_protection import lift_block
@@ -166,6 +169,18 @@ class AccountWayfindingTests(TestCase):
         response = self.client.get(reverse("account_admin"))
         self.assertContains(response, 'value="approve"')
         self.assertContains(response, "Every registration has confirmed its email address.")
+
+    def test_a_resend_that_fails_to_send_says_so(self):
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        applicant = unconfirmed_applicant("applicant@example.com")
+        self.sign_in("admin@example.com")
+        with mock.patch("training.accounts.send_mail", side_effect=TransientMailError("graph_unreachable")):
+            with self.captureOnCommitCallbacks(execute=True):
+                self.client.post(reverse("account_admin"), {"action": "resend_verification",
+                                                            "employee_id": applicant.pk})
+        response = self.client.get(reverse("account_admin"))
+        self.assertContains(response, "The confirmation link to applicant@example.com may not have been sent.")
+        self.assertNotContains(response, "Confirmation link sent")
 
     @override_settings(ACCOUNT_RATE_LIMITS=limits(account_email=1))
     def test_confirmation_resends_share_the_applicants_limit(self):

@@ -3,7 +3,7 @@
 {% block content %}
   <div class="page-heading"><div><p class="eyebrow">People</p><h1>Accounts</h1><p class="muted">Review applications and invite employees to sign in.</p></div><a class="button secondary" href="{% url 'address_blocks' %}">Blocked addresses</a></div>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-  {% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+  {% if notice %}<p {% if notice_failed %}class="error" role="alert"{% else %}role="status"{% endif %}>{{ notice }}</p>{% endif %}
   <form class="card employee-form" method="post">
     {% csrf_token %}
     <input type="hidden" name="action" value="invite">

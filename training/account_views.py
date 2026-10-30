@@ -297,22 +297,34 @@ def account_admin(request):
                                    approve=action == "approve")
             elif action == "resend_setup":
                 employee = resend_setup(actor=request.employee, employee_id=request.POST.get("employee_id"))
-                request.session["account_notice"] = f"Setup link sent to {employee.email}."
+                request.session["account_resend"] = {"link": "setup", "employee_id": str(employee.pk)}
             elif action == "resend_verification":
                 employee = resend_verification_for(actor=request.employee,
                                                    employee_id=request.POST.get("employee_id"))
-                request.session["account_notice"] = f"Confirmation link sent to {employee.email}."
+                request.session["account_resend"] = {"link": "confirmation", "employee_id": str(employee.pk)}
             else:
                 error = AccountInputError("Choose an action.")
         except AccountInputError as exc:
             error = exc
         if not error:
             return redirect("account_admin")
+    notice, notice_failed = _resend_notice(request)
     return render(request, "training/account_admin.html", _admin_context(
-        error=error, notice=request.session.pop("account_notice", ""),
+        error=error, notice=notice, notice_failed=notice_failed,
         form_name=request.POST.get("name", "") if error else "",
         form_email=request.POST.get("email", "") if error else "",
     ), status=400 if error else 200)
+
+
+def _resend_notice(request):
+    """Report a resend by its recorded outcome. The send has finished by the next page view; the request can't tell."""
+    resend = request.session.pop("account_resend", None)
+    employee = resend and Employee.objects.filter(pk=resend["employee_id"]).first()
+    if not employee:
+        return "", False
+    if employee.link_send_failed_at:
+        return f"The {resend['link']} link to {employee.email} may not have been sent. Try again later.", True
+    return f"{resend['link'].capitalize()} link sent to {employee.email}.", False
 
 
 def _admin_context(**extra):
