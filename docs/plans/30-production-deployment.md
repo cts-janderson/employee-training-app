@@ -110,6 +110,7 @@ Done; see **Status** below. These parts move to later steps:
   - Any notifications are exhausted or ambiguous and haven't been reconciled.
   - The latest backup is older than 26 hours.
   - Recent account sends have failed.
+  - An address block is open ([plan 33](33-sign-in-attack-protection.md)), with its network and expiry.
 - Host cron or an external monitor runs `ops_status` and emails the operational owner.
 
 ### G. Documentation
@@ -120,6 +121,7 @@ Done; see **Status** below. These parts move to later steps:
   - First deployment, then `create_administrator`, which prompts for a password.
   - Upgrade and rollback, logs, backup and restore, secret rotation (client secret expiry), and the `ops_status` alert runbook (ambiguous notification reconciliation, worker restart).
   - Offboarding.
+  - Administrator recovery from [plan 33](33-sign-in-attack-protection.md): `unblock_address`, `remove_passkeys`, and adding a second passkey.
 - ADR-0010 (Docker packaging) and ADR-0011 (Graph mail). Update `README.md` and `AGENTS.md` with production commands. Mark the gates in `docs/implementation-plan.md` as they are met.
 
 ### H. Release gates (owner actions)

@@ -16,7 +16,7 @@ export DATABASE_URL=postgresql://localhost:5432/employee_training
 ./scripts/start-local.sh
 ```
 
-The script applies all migrations, creates a synthetic administrator, and serves the app at <http://127.0.0.1:8000/>. It uses `postgresql://localhost:5432/employee_training` by default. If your connection differs, export a matching `DATABASE_URL` before running it. The unauthenticated health endpoint is <http://127.0.0.1:8000/health/>.
+The script applies all migrations, creates a synthetic administrator, and serves the app at <http://localhost:8000/>. It uses `postgresql://localhost:5432/employee_training` by default. If your connection differs, export a matching `DATABASE_URL` before running it. The unauthenticated health endpoint is <http://localhost:8000/health/>.
 
 To explore the populated workflows, stop the server, seed the same local database, and restart it:
 
@@ -38,7 +38,7 @@ With PostgreSQL running, run configuration and migration checks, the full test s
 ## Current scope and rollout status
 
 - **Implemented locally:** versioned document and legacy slide authoring; document/slide acknowledgment; quiz grading and retries; individual and group assignment; completion reports by training/employee with matching CSV exports; reviewed Markdown/text draft import; renewal review; assignment cancellation, archiving, and waiver; durable notification intents, scheduled reminders, and audited manual nudges.
-- **Development integrations:** email and password sign-in exists as a local skeleton ([Slice 29](docs/plans/29-sign-in-skeleton.md)); real administrators use the administrator workflows with real employees ([Slice 31](docs/plans/31-real-employee-workflows.md)), and the loopback-only demo actor switcher drives the separate demo data. The notification worker uses the in-memory sink with the demo stub, or sends through Microsoft Graph when it's configured ([ADR-0011](docs/adr/0011-email-through-microsoft-graph.md)); nothing has been sent through a real tenant yet.
+- **Development integrations:** email and password sign-in exists as a local skeleton ([Slice 29](docs/plans/29-sign-in-skeleton.md)); real administrators use the administrator workflows with real employees ([Slice 31](docs/plans/31-real-employee-workflows.md)), and the loopback-only demo actor switcher drives the separate demo data. The notification worker uses the in-memory sink with the demo stub, or sends through Microsoft Graph when it's configured ([ADR-0011](docs/adr/0011-email-through-microsoft-graph.md)); nothing has been sent through a real tenant yet. A network with too many failed sign-ins gets a 24-hour address block, and administrators can sign in with a passkey to lift it ([plan 33](docs/plans/33-sign-in-attack-protection.md)).
 - **Before real use:** implement [email and password authentication with enrollment approval](docs/plans/email-password-authentication.md) and connect an approved email provider, prove deployment and worker operation, verify PostgreSQL migrations and concurrency, and complete the operational owner and employee-data retention/access approvals in the [MVP release criteria](docs/implementation-plan.md#mvp-release-criteria). Keep real employee data out until those gates are met.
 
 The [MVP requirements](docs/mvp.md) define confirmed stories `US-01`–`US-12`. [Extended stories](docs/user-stories.md) record locally implemented additions beyond that baseline. Local implementation does not by itself complete the release criteria.

@@ -1,0 +1,38 @@
+{% extends "training/base.html" %}
+{% load tz %}
+{% block title %}Blocked addresses · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">People</p><h1>Blocked addresses</h1><p class="muted">A network that sends too many wrong passwords can't sign in for {{ block_hours }} hours. Administrators can still sign in with a passkey.</p></div><a class="button secondary" href="{% url 'account_admin' %}">Accounts</a></div>
+  {% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+  {% timezone org_time_zone %}
+  <div class="section-heading"><h2>Active blocks</h2><span class="section-count">{{ active_blocks|length }}</span></div>
+  <div class="collection-panel">
+  {% for block in active_blocks %}
+    <article class="collection-row security-row">
+      <div class="record-main"><h3>{{ block.network }}</h3><p class="record-subtitle">Blocked {{ block.created_at|date:"M j, Y H:i" }} after {{ block.failure_count }} failed sign-ins · {% if block.expires_at %}ends {{ block.expires_at|date:"M j, Y H:i" }}{% else %}permanent{% endif %}</p></div>
+      <form method="post" class="actions">
+        {% csrf_token %}<input type="hidden" name="network" value="{{ block.network }}"><input type="hidden" name="block_id" value="{{ block.id }}">
+        <button type="submit" name="action" value="lift">Lift block</button>
+        {% if block.expires_at %}<button type="submit" name="action" value="permanent" class="secondary">Make permanent</button>{% endif %}
+      </form>
+    </article>
+  {% empty %}
+    <p class="empty-state">No network is blocked.</p>
+  {% endfor %}
+  </div>
+  <div class="section-heading"><h2>Ended blocks</h2></div>
+  <div class="collection-panel">
+  {% for block in ended_blocks %}
+    <article class="collection-row security-row">
+      <div class="record-main"><h3>{{ block.network }}</h3><p class="record-subtitle">Blocked {{ block.created_at|date:"M j, Y H:i" }} · {% if block.end_reason == "lifted" %}lifted by {{ block.ended_by.name }}{% elif block.end_reason %}{{ block.get_end_reason_display|lower }}{% else %}expired{% endif %} {{ block.ended_at|default:block.expires_at|date:"M j, Y H:i" }}</p></div>
+    </article>
+  {% empty %}
+    <p class="empty-state">No blocks have ended yet.</p>
+  {% endfor %}
+  </div>
+  <h2>Security events</h2>
+  {% for event in events %}
+    <p>{{ event.occurred_at|date:"M j, Y H:i" }} · {{ event.get_kind_display }}{% if event.network %} · {{ event.network }}{% endif %}{% if event.employee %} · {{ event.employee.name }}{% endif %}{% if event.actor %} · by {{ event.actor.name }}{% endif %}{% if event.detail %} · {{ event.detail }}{% endif %}</p>
+  {% empty %}<p>No events yet.</p>{% endfor %}
+  {% endtimezone %}
+{% endblock %}

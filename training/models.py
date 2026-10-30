@@ -37,6 +37,8 @@ class Employee(AbstractBaseUser):
     session_version = models.PositiveIntegerField(default=0)
     # Set when the last verification, setup or reset email couldn't be sent; cleared by the next success.
     link_send_failed_at = models.DateTimeField(null=True, blank=True)
+    # The opaque WebAuthn user handle for passkeys; never the email. Set when the first passkey is added.
+    webauthn_user_handle = models.BinaryField(max_length=32, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Email uniqueness is the case-insensitive constraint below; see ADR-0009.
@@ -808,7 +810,7 @@ class WorkerHeartbeat(models.Model):
 class RateLimitCounter(models.Model):
     """Account requests counted in one fixed window, shared by every process that serves requests."""
     scope = models.CharField(max_length=50)
-    # An HMAC-SHA256 of the limited key under SECRET_KEY: without the secret, nobody can test a guessed email or address.
+    # An HMAC-SHA256 of the limited key, keyed from SECRET_KEY: without the secret, nobody can test a guessed email or address.
     key_digest = models.CharField(max_length=64)
     window_start = models.DateTimeField()
     count = models.PositiveIntegerField()
@@ -816,3 +818,80 @@ class RateLimitCounter(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["scope", "key_digest", "window_start"],
                                                name="unique_rate_limit_window")]
+
+
+class AddressBlock(models.Model):
+    """A network refused sign-in after too many failed attempts; see docs/plans/33-sign-in-attack-protection.md."""
+    class EndReason(models.TextChoices):
+        LIFTED = "lifted", "Lifted"
+        EXPIRED = "expired", "Expired"
+        COMMAND = "command", "Lifted from the host"
+
+    # An IPv4 address or an IPv6 /64, in CIDR form.
+    network = models.CharField(max_length=50)
+    failure_count = models.PositiveIntegerField()
+    created_at = models.DateTimeField()
+    # Null when an administrator made the block permanent.
+    expires_at = models.DateTimeField(null=True, blank=True)
+    made_permanent_at = models.DateTimeField(null=True, blank=True)
+    made_permanent_by = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True,
+                                          related_name="permanent_blocks")
+    ended_at = models.DateTimeField(null=True, blank=True)
+    ended_by = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True,
+                                 related_name="lifted_blocks")
+    end_reason = models.CharField(max_length=10, choices=EndReason.choices, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["network"], condition=Q(ended_at__isnull=True),
+                                               name="one_open_block_per_network")]
+
+
+class SecurityEvent(models.Model):
+    """A record of address blocks and passkey changes, including those made from the host."""
+    class Kind(models.TextChoices):
+        BLOCK_CREATED = "block_created", "Address blocked"
+        BLOCK_LIFTED = "block_lifted", "Block lifted"
+        BLOCK_EXPIRED = "block_expired", "Block expired"
+        BLOCK_PERMANENT = "block_permanent", "Block made permanent"
+        BLOCK_COMMAND = "block_command", "Block lifted from the host"
+        PASSKEY_ADDED = "passkey_added", "Passkey added"
+        PASSKEY_REMOVED = "passkey_removed", "Passkey removed"
+        PASSKEYS_COMMAND = "passkeys_command", "Passkeys removed from the host"
+
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    employee = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True,
+                                 related_name="security_events")
+    # Null for an automatic event or a host command.
+    actor = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True,
+                              related_name="security_actions")
+    network = models.CharField(max_length=50, blank=True)
+    detail = models.CharField(max_length=200, blank=True)
+    occurred_at = models.DateTimeField()
+
+
+class Passkey(models.Model):
+    """An administrator's WebAuthn credential, used to sign in even from a blocked network."""
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="passkeys")
+    credential_id = models.BinaryField(unique=True)
+    public_key = models.BinaryField()
+    sign_count = models.PositiveBigIntegerField(default=0)
+    transports = models.JSONField(default=list, blank=True)
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField()
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+
+class PasskeyChallenge(models.Model):
+    """A one-time WebAuthn challenge, used up atomically so a response can't be replayed."""
+    class Purpose(models.TextChoices):
+        REGISTER = "register", "Register"
+        AUTHENTICATE = "authenticate", "Authenticate"
+
+    challenge = models.BinaryField()
+    purpose = models.CharField(max_length=12, choices=Purpose.choices)
+    session_key = models.CharField(max_length=40)
+    # The administrator adding a passkey; null for sign-in.
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, null=True, blank=True,
+                                 related_name="passkey_challenges")
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)

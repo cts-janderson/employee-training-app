@@ -4,6 +4,7 @@ from datetime import timedelta
 from unittest import mock, skipUnless
 from urllib.parse import urlsplit
 
+from django.conf import settings
 from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -27,6 +28,11 @@ def real_employee(email, *, role=Employee.Role.EMPLOYEE, password=PASSWORD, **fi
     employee.set_password(password)
     employee.save()
     return employee
+
+
+def limits(**changes):
+    """The configured limits, with the named scopes changed to that many per minute."""
+    return {**settings.ACCOUNT_RATE_LIMITS, **{scope: (limit, 60) for scope, limit in changes.items()}}
 
 
 @override_settings(DEBUG=True, DEV_AUTH_STUB=True, DEV_ADMIN_EMAIL="demo.admin@example.test")
@@ -216,16 +222,14 @@ class AccountTests(TestCase):
                 self.assertContains(response, "If an account uses that address")
         self.assertEqual(mail.outbox, [])
 
-    @override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (2, 60), "sign_in_client": (100, 60), "sign_in_email": (100, 60),
-                                            "register": (1, 60), "account_email": (1, 60)})
+    @override_settings(ACCOUNT_RATE_LIMITS=limits(sign_in=2))
     def test_repeated_sign_in_attempts_are_limited(self):
         for _ in range(2):
             self.assertEqual(self.sign_in("admin@example.com", "wrong password here").status_code, 200)
         self.assertEqual(self.sign_in("admin@example.com").status_code, 429)
         self.assertNotIn("_auth_user_id", self.client.session)
 
-    @override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (100, 60), "sign_in_client": (100, 60), "sign_in_email": (2, 60),
-                                            "register": (1, 60), "account_email": (1, 60)})
+    @override_settings(ACCOUNT_RATE_LIMITS=limits(sign_in_email=2))
     def test_sign_in_attempts_for_one_email_are_limited_across_addresses(self):
         for address in ("10.0.0.1", "10.0.0.2"):
             self.client.post(reverse("sign_in"), {"username": "admin@example.com", "password": "wrong"},
@@ -235,8 +239,7 @@ class AccountTests(TestCase):
         self.assertEqual(response.status_code, 429)
         self.assertNotIn("_auth_user_id", self.client.session)
 
-    @override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (100, 60), "sign_in_client": (2, 60), "sign_in_email": (100, 60),
-                                            "register": (1, 60), "account_email": (1, 60)})
+    @override_settings(ACCOUNT_RATE_LIMITS=limits(sign_in_client=2))
     def test_sign_in_attempts_from_one_address_are_limited_across_emails(self):
         for email in ("first@example.com", "second@example.com"):
             self.client.post(reverse("sign_in"), {"username": email, "password": PASSWORD})

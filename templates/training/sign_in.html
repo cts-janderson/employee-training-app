@@ -1,4 +1,5 @@
 {% extends "training/base.html" %}
+{% load static %}
 {% block title %}Sign in · Employee Training{% endblock %}
 {% block content %}
   <h1>Sign in</h1>
@@ -11,5 +12,11 @@
     <div><label for="sign-in-password">Password</label><input id="sign-in-password" name="password" type="password" autocomplete="current-password" required></div>
     <div><button type="submit">Sign in</button></div>
   </form>
+  <div class="card stack" data-passkey-sign-in data-options-url="{% url 'passkey_sign_in_options' %}" data-verify-url="{% url 'passkey_sign_in_verify' %}{% if next %}?next={{ next|urlencode }}{% endif %}" hidden>
+    <p class="muted">Administrators can sign in with a passkey, even from a blocked network.</p>
+    <p class="error" role="alert" data-passkey-error hidden></p>
+    <div><button type="button" class="secondary">Sign in with a passkey</button></div>
+  </div>
   <p><a href="{% url 'password_reset' %}">Forgot your password?</a> · <a href="{% url 'register' %}">Register</a></p>
+  <script src="{% static 'training/passkeys.js' %}" defer></script>
 {% endblock %}

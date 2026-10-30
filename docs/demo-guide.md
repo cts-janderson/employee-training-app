@@ -17,7 +17,7 @@ Use this guide with a local PostgreSQL database and the [local development setup
 
 ## Walk through the workflows
 
-1. Open <http://127.0.0.1:8000/> as the synthetic administrator. In **Trainings**, edit the Incident Response draft, save changes, and use **Review saved version for publication** before publishing. Published versions are immutable; a new revision is a separate draft.
+1. Open <http://localhost:8000/> as the synthetic administrator. In **Trainings**, edit the Incident Response draft, save changes, and use **Review saved version for publication** before publishing. Published versions are immutable; a new revision is a separate draft.
 2. Open **Quizzes** to inspect the library quiz. A complete, titled library quiz can be copied into a training draft with **Attach from quiz library**. The saved copy can then be edited independently.
 3. Open a published training's **Assign** action. Select synthetic employees or a group, choose the version and a due date, and review the recipients and conflicts before submitting. Existing active, incomplete work for the same training remains a conflict; cancel it with a reason before assigning a replacement.
 4. Open **Assignments** to filter, search, inspect an assignment's evidence, and export the filtered result. Try the pending-workload and quiz-outcomes charts. Review Priya's waiver and Casey's archived assignment. Restoring an archived canceled assignment reveals its history without reopening it. From **Trainings**, open **Review renewals** to find Leo's due renewal.

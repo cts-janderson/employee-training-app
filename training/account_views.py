@@ -1,5 +1,3 @@
-from ipaddress import ip_address
-
 from django.conf import settings
 from django.contrib.auth import logout, update_session_auth_hash, views as auth_views
 from django.contrib.auth.decorators import login_required
@@ -22,6 +20,8 @@ from .accounts import (
     awaiting_setup,
     decide_application,
     invite_employee,
+    is_account_administrator,
+    limit_reached,
     mark_verified,
     normalize_email,
     pending_applications,
@@ -38,33 +38,19 @@ from .accounts import (
 )
 from .dev_auth import account_admin_required, mark_real_session, clear_real_session
 from .models import Employee
+from .sign_in_protection import (
+    active_block,
+    blocks_overview,
+    client_network,
+    lift_block,
+    make_permanent,
+    normalize_network,
+    record_failure,
+    set_trusted_device,
+    trusted_device,
+)
 
 INVALID_LINK = "This link is invalid or has expired. Request a new one."
-
-
-def _client(request):
-    """The client address for rate limits. Behind a trusted proxy, the last X-Forwarded-For entry is the client."""
-    remote = request.META.get("REMOTE_ADDR", "")
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    try:
-        raw, peer = ip_address(remote), _address(remote)
-    except ValueError:
-        return remote
-    # Match trust against both forms, so a network written either way still covers a mapped peer.
-    trusted = any(raw in network or peer in network for network in settings.TRUSTED_PROXY_NETWORKS)
-    if not forwarded or not trusted:
-        return str(peer)
-    try:
-        # The proxy appends the address it saw, so earlier entries may be forged by the client.
-        return str(_address(forwarded.split(",")[-1].strip()))
-    except ValueError:
-        return str(peer)
-
-
-def _address(value):
-    """Parse an address, reading an IPv4-mapped IPv6 address as IPv4 so one client has one key."""
-    address = ip_address(value)
-    return getattr(address, "ipv4_mapped", None) or address
 
 
 def _message(request, title, message, *, status=200, link=None, link_text=""):
@@ -77,26 +63,45 @@ def _too_many(request):
     return _message(request, "Try again later", "Too many requests. Wait a while and try again.", status=429)
 
 
+def _blocked(request):
+    return _message(request, "Sign-in blocked",
+                    "Sign-in from your network is blocked. Contact an administrator.", status=403,
+                    link=reverse("sign_in"), link_text="Administrators: sign in with a passkey")
+
+
 class SignInView(auth_views.LoginView):
     template_name = "training/sign_in.html"
     redirect_authenticated_user = True
 
     def post(self, request, *args, **kwargs):
-        client, email = _client(request), normalize_email(request.POST.get("username"))
-        # Every counter is incremented, so one password can't be spread across many emails or addresses.
-        counts = [rate_limited("sign_in", f"{client}:{email}"), rate_limited("sign_in_client", client),
-                  rate_limited("sign_in_email", email)]
-        if any(counts):
+        self.network, email = client_network(request), normalize_email(request.POST.get("username"))
+        if active_block(self.network):
+            return _blocked(request)
+        device = trusted_device(request, email)
+        # Failures count against the trusted browser and its email, or else against the network and email,
+        # so an attack on one email can't lock its employee out of a browser they already use.
+        self.failure_counters = ([("sign_in_device", device), ("trusted_email", email)] if device else
+                                 [("sign_in", f"{self.network}:{email}"), ("sign_in_email", email)])
+        # Every attempt counts against the network, which bounds the attempts in flight at once.
+        limited = rate_limited("sign_in_client", self.network)
+        if limited or any([limit_reached(scope, key) for scope, key in self.failure_counters]):
             # An unbound form, so the limited attempt never reaches authentication.
             form = self.get_form_class()(request)
             return self.render_to_response(self.get_context_data(form=form, limited=True), status=429)
         return super().post(request, *args, **kwargs)
 
+    def form_invalid(self, form):
+        for scope, key in self.failure_counters:
+            rate_limited(scope, key)
+        if record_failure(self.network):
+            return _blocked(self.request)
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         response = super().form_valid(form)
         # A real session replaces any demo choice.
         self.request.session.pop("demo_employee_id", None)
-        return mark_real_session(response)
+        return set_trusted_device(self.request, mark_real_session(response), form.get_user())
 
 
 class SignOutView(auth_views.LogoutView):
@@ -110,7 +115,10 @@ class SignOutView(auth_views.LogoutView):
 def register_view(request):
     error = None
     if request.method == "POST":
-        if rate_limited("register", _client(request)):
+        network = client_network(request)
+        if active_block(network):
+            return _blocked(request)
+        if rate_limited("register", network):
             return _too_many(request)
         try:
             register(name=request.POST.get("name", ""), email=request.POST.get("email", ""),
@@ -155,7 +163,7 @@ def verify_email_view(request, uidb64, token):
 def account_status(request):
     employee = request.user
     request.employee = employee
-    notice = ""
+    notice = request.session.pop("passkey_notice", "")
     if request.method == "POST" and request.POST.get("action") == "resend_verification":
         if rate_limited("account_email", f"verify:{employee.pk}"):
             return _too_many(request)
@@ -163,14 +171,20 @@ def account_status(request):
         notice = "We've sent a new confirmation link."
     return render(request, "training/account_status.html", {
         "state": account_state(employee), "states": AccountState, "notice": notice,
+        "passkeys": employee.passkeys.order_by("created_at") if is_account_administrator(employee) else None,
     })
 
 
 @require_http_methods(["GET", "POST"])
 def password_reset_request(request):
     if request.method == "POST":
-        email = normalize_email(request.POST.get("email"))
-        if rate_limited("account_email", f"reset:{_client(request)}:{email}"):
+        email, network = normalize_email(request.POST.get("email")), client_network(request)
+        if active_block(network):
+            return _blocked(request)
+        # Both counters always count; the second caps floods to one email from many networks.
+        limited = [rate_limited("account_email", f"reset:{network}:{email}"),
+                   rate_limited("account_email_target", f"reset:{email}")]
+        if any(limited):
             return _too_many(request)
         request_password_reset(email)
         return _message(request, "Check your email",
@@ -287,3 +301,25 @@ def _admin_context(**extra):
                   .select_related("approval_decided_by").order_by("-approval_decided_at")[:20],
         **extra,
     }
+
+
+@require_http_methods(["GET", "POST"])
+@account_admin_required
+def address_blocks(request):
+    notice = ""
+    if request.method == "POST":
+        action = request.POST.get("action")
+        try:
+            network = normalize_network(request.POST.get("network", ""))
+        except ValueError:
+            network = None
+        if action == "lift" and network and lift_block(network, actor=request.employee):
+            notice = "Block lifted."
+        elif action == "permanent" and make_permanent(request.POST.get("block_id"), actor=request.employee):
+            notice = "Block made permanent."
+        else:
+            notice = "That block has already ended."
+    return render(request, "training/address_blocks.html", {
+        **blocks_overview(), "notice": notice, "org_time_zone": settings.ORG_TIME_ZONE,
+        "block_hours": settings.ADDRESS_BLOCK_HOURS,
+    })

@@ -1,6 +1,4 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
-import hashlib
-import hmac
 import logging
 import unicodedata
 from contextlib import contextmanager
@@ -18,6 +16,7 @@ from django.db import IntegrityError, connection, transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -109,11 +108,21 @@ setup_tokens = _PurposeTokenGenerator("setup")
 reset_tokens = _PurposeTokenGenerator("reset")
 
 
-def rate_limited(scope, key, *, now=None):
-    """Count a request in the scope's current fixed window and report whether the limit is exceeded."""
+def _counter(scope, key, now):
+    """The scope's limit, the start of its current fixed window, and the stored digest of the key."""
     limit, window = settings.ACCOUNT_RATE_LIMITS[scope]
     seconds = int((now or timezone.now()).timestamp())
     window_start = datetime.fromtimestamp(seconds - seconds % window, tz=dt_timezone.utc)
+    return limit, window_start, _key_digest(key)
+
+
+def _key_digest(key):
+    return salted_hmac("training.rate_limit", key, algorithm="sha256").hexdigest()
+
+
+def count_request(scope, key, *, now=None):
+    """Count a request in the scope's current fixed window and return the new count."""
+    _, window_start, digest = _counter(scope, key, now)
     table = connection.ops.quote_name(RateLimitCounter._meta.db_table)
     with connection.cursor() as cursor:
         # One atomic upsert, so parallel requests in any process each get their own count.
@@ -121,9 +130,27 @@ def rate_limited(scope, key, *, now=None):
             f"INSERT INTO {table} (scope, key_digest, window_start, count) VALUES (%s, %s, %s, 1) "
             f"ON CONFLICT (scope, key_digest, window_start) DO UPDATE SET count = {table}.count + 1 "
             "RETURNING count",
-            [scope, hmac.new(settings.SECRET_KEY.encode(), key.encode(), hashlib.sha256).hexdigest(), window_start],
+            [scope, digest, window_start],
         )
-        return cursor.fetchone()[0] > limit
+        return cursor.fetchone()[0]
+
+
+def rate_limited(scope, key, *, now=None):
+    """Count a request and report whether the scope's limit is exceeded."""
+    return count_request(scope, key, now=now) > settings.ACCOUNT_RATE_LIMITS[scope][0]
+
+
+def limit_reached(scope, key, *, now=None):
+    """Report whether the scope's limit is used up, without counting this request."""
+    limit, window_start, digest = _counter(scope, key, now)
+    count = RateLimitCounter.objects.filter(scope=scope, key_digest=digest, window_start=window_start) \
+        .values_list("count", flat=True).first()
+    return (count or 0) >= limit
+
+
+def clear_rate_limits(scopes, key):
+    """Delete every window of these scopes' counters for one key."""
+    RateLimitCounter.objects.filter(scope__in=scopes, key_digest=_key_digest(key)).delete()
 
 
 def prune_rate_limits(*, now=None):

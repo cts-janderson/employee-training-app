@@ -12,7 +12,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 
 from config.logging import RedactAccountLinks, redact_account_links
 
-from .account_views import _client
+from .sign_in_protection import client_address
 from .accounts import send_account_email
 from .models import Employee
 
@@ -71,7 +71,7 @@ class ClientAddressTests(SimpleTestCase):
         extra = {"REMOTE_ADDR": remote}
         if forwarded is not None:
             extra["HTTP_X_FORWARDED_FOR"] = forwarded
-        return _client(RequestFactory().get("/", **extra))
+        return client_address(RequestFactory().get("/", **extra))
 
     def test_trusted_proxy_names_the_client_with_its_last_entry(self):
         self.assertEqual(self.client_for("172.18.0.5", "203.0.113.9"), "203.0.113.9")
