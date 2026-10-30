@@ -130,7 +130,8 @@ def count_request(scope, key, *, now=None):
             f"INSERT INTO {table} (scope, key_digest, window_start, count) VALUES (%s, %s, %s, 1) "
             f"ON CONFLICT (scope, key_digest, window_start) DO UPDATE SET count = {table}.count + 1 "
             "RETURNING count",
-            [scope, digest, window_start],
+            # Formatted as the ORM stores it, so limit_reached() and pruning find the row on SQLite too.
+            [scope, digest, connection.ops.adapt_datetimefield_value(window_start)],
         )
         return cursor.fetchone()[0]
 

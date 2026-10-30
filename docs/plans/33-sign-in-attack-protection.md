@@ -117,10 +117,10 @@ The deployment guide (plan 30 step G) gets a recovery section. On the host:
   - IPv6 addresses in one `/64` share a block, and IPv4-mapped addresses match their IPv4 block.
   - Only real administrators can use the page. `unblock_address` lifts a block and records an event.
 - **Passkeys** (py_webauthn's test vectors or a fake authenticator):
-  - Adding a passkey needs a recent password re-entry, and re-entry failures are limited.
+  - Adding a passkey checks the password in the same request, wrong passwords are limited, and one password entry's challenge adds at most one passkey, even with parallel requests.
   - Passkey sign-in works from a blocked network.
   - Passkey sign-in is refused for each of these: a user who isn't an administrator, a deactivated administrator, a mismatched `userHandle`, a reused challenge (including two at once on PostgreSQL), an expired challenge, another session's challenge, a wrong origin, and a sign count that goes backward.
-  - Removing a passkey needs a re-entry and stops the passkey working.
+  - Removing a passkey checks the password and stops the passkey working.
 - **Reset cap:** the 11th reset request in an hour for one email, from different networks, gets 429.
 - **JavaScript:** `training/js_tests/passkeys.test.cjs` covers base64url conversion, the CSRF header, and the request flow against a stubbed `navigator.credentials`.
 
