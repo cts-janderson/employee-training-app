@@ -459,16 +459,15 @@ def remove_registration(*, actor, employee_id):
 def expire_registrations(*, now=None, batch=100):
     """Remove up to batch registrations still unconfirmed a set time after their newest confirmation email.
 
-    Protected rows are skipped without counting, so they can't hold back the expired rows behind them.
+    Registrations a security event refers to (the one record that can) are left out, so they can't fill
+    every batch and hold back the rest. Any other reference is logged and skipped within the batch.
     """
     now = now or timezone.now()
     cutoff = now - timedelta(days=settings.UNCONFIRMED_REGISTRATION_DAYS)
     candidates = (awaiting_verification().alias(sent=Coalesce("verification_sent_at", "created_at"))
-                  .filter(sent__lte=cutoff).values_list("pk", flat=True))
+                  .filter(sent__lte=cutoff, security_events__isnull=True).values_list("pk", flat=True)[:batch])
     removed = 0
     for employee_id in list(candidates):
-        if removed >= batch:
-            break
         try:
             removed += _delete_registration(employee_id, kind=SecurityEvent.Kind.REGISTRATION_EXPIRED,
                                             sent_before=cutoff, now=now)
