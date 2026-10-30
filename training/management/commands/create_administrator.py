@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from training.accounts import normalize_email
+from training.accounts import normalize_email, real_administrator_exists
 from training.models import Employee
 
 
@@ -21,7 +21,7 @@ class Command(BaseCommand):
         name, email = name.strip(), normalize_email(email)
         if not name or not email:
             raise CommandError("Enter a name and an email address.")
-        if Employee.objects.filter(role=Employee.Role.ADMINISTRATOR, is_demo=False).exists():
+        if real_administrator_exists():
             raise CommandError("A real administrator already exists. Use the Accounts page instead.")
         administrator = Employee(name=name, email=email, role=Employee.Role.ADMINISTRATOR)
         password = getpass("Password: ")

@@ -1,0 +1,15 @@
+{% extends "training/base.html" %}
+{% block title %}Local outbox · Employee Training{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">Local development</p><h1>Local outbox</h1><p class="muted">Account emails this server sent since it last started, newest first. Notification emails come from the worker and are on the Notifications pages.</p></div></div>
+  <h2 class="visually-hidden">Emails</h2>
+  <div class="collection-panel">
+  {% for email in emails %}
+    <article class="collection-row security-row">
+      <div class="record-main"><h3>{{ email.subject }}</h3><p class="record-subtitle">To {{ email.to }}</p>{% if email.link %}<p><a href="{{ email.link }}">{{ email.link }}</a></p>{% endif %}</div>
+    </article>
+  {% empty %}
+    <p class="empty-state">No account emails yet. Register, request a password reset or invite an employee, then reload this page.</p>
+  {% endfor %}
+  </div>
+{% endblock %}

@@ -29,7 +29,12 @@
           <a href="{% url 'reports' %}" {% if request.resolver_match.url_name == 'reports' or request.resolver_match.url_name == 'training_report' or request.resolver_match.url_name == 'employee_report' %}aria-current="page"{% endif %}>Reports</a>
           <a href="{% url 'notification_log' %}" {% if request.resolver_match.url_name == 'notification_log' or request.resolver_match.url_name == 'notification_detail' %}aria-current="page"{% endif %}>Notifications</a>
           {% if not request.employee.is_demo %}
-            <a href="{% url 'account_admin' %}" {% if request.resolver_match.url_name == 'account_admin' %}aria-current="page"{% endif %}>Accounts</a>
+            <a href="{% url 'account_admin' %}" {% if request.resolver_match.url_name == 'account_admin' or request.resolver_match.url_name == 'address_blocks' and not open_blocks %}aria-current="page"{% endif %}>Accounts{% if waiting_applications %} <span class="nav-count">{{ waiting_applications }}<span class="visually-hidden"> {{ waiting_applications|pluralize:"application,applications" }} waiting</span></span>{% endif %}</a>
+            {% if open_blocks %}
+              <a class="nav-sub" href="{% url 'address_blocks' %}" {% if request.resolver_match.url_name == 'address_blocks' %}aria-current="page"{% endif %}>Blocked addresses <span class="nav-count alert">{{ open_blocks }}<span class="visually-hidden"> {{ open_blocks|pluralize:"network,networks" }} blocked</span></span></a>
+            {% endif %}
+          {% else %}
+            <a href="{% url 'demo_accounts' %}" {% if request.resolver_match.url_name == 'demo_accounts' %}aria-current="page"{% endif %}>Accounts</a>
           {% endif %}
         {% endif %}
       </nav>
@@ -41,6 +46,7 @@
           <a href="{% url 'sign_in' %}" {% if request.resolver_match.url_name == 'sign_in' %}aria-current="page"{% endif %}>Sign in</a>
           {% if demo_enabled %}<a href="{% url 'demo_switch' %}" {% if request.resolver_match.url_name == 'demo_switch' %}aria-current="page"{% endif %}>Switch profile</a>{% endif %}
         {% endif %}
+        {% if demo_enabled %}<a href="{% url 'local_outbox' %}" {% if request.resolver_match.url_name == 'local_outbox' %}aria-current="page"{% endif %}>Local outbox</a>{% endif %}
       </div>
     </aside>
     <div class="workspace">

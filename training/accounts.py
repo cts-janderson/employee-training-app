@@ -130,7 +130,8 @@ def count_request(scope, key, *, now=None):
             f"INSERT INTO {table} (scope, key_digest, window_start, count) VALUES (%s, %s, %s, 1) "
             f"ON CONFLICT (scope, key_digest, window_start) DO UPDATE SET count = {table}.count + 1 "
             "RETURNING count",
-            [scope, digest, window_start],
+            # Formatted as the ORM stores it, so limit_reached() and pruning find the row on SQLite too.
+            [scope, digest, connection.ops.adapt_datetimefield_value(window_start)],
         )
         return cursor.fetchone()[0]
 
@@ -166,7 +167,7 @@ def _link(route, employee, tokens):
     return settings.APP_BASE_URL + reverse(route, args=[uidb64, tokens.make_token(employee)])
 
 
-_EMAILS = {
+ACCOUNT_EMAILS = {
     "verify": ("Confirm your email address", "verify_email", verification_tokens),
     "setup": ("Set up your training account", "account_setup", setup_tokens),
     "reset": ("Reset your training password", "password_reset_confirm", reset_tokens),
@@ -197,7 +198,7 @@ def _account_email_lock(employee_id):
 
 def send_account_email(employee, purpose):
     """Send after the surrounding transaction commits. A new link supersedes earlier ones."""
-    subject, route, tokens = _EMAILS[purpose]
+    subject, route, tokens = ACCOUNT_EMAILS[purpose]
 
     def send():
         # One send per employee at a time. The new generation is committed before the email leaves, so a
@@ -320,6 +321,17 @@ def pending_applications():
     ).exclude(verified_email="").order_by("created_at", "id") if employee.email_is_verified]
 
 
+def awaiting_verification():
+    """Registrations that haven't confirmed their email, so they can't join the approval queue yet."""
+    return [employee for employee in Employee.objects.filter(
+        is_demo=False, is_active=True, approval_status=Employee.Approval.PENDING,
+    ).order_by("created_at", "id") if not employee.email_is_verified]
+
+
+def real_administrator_exists():
+    return Employee.objects.filter(role=Employee.Role.ADMINISTRATOR, is_demo=False).exists()
+
+
 def awaiting_setup():
     return Employee.objects.filter(
         is_demo=False, approval_status=Employee.Approval.APPROVED, is_active=True,
@@ -365,6 +377,18 @@ def invite_employee(*, actor, name, email, now=None):
     except IntegrityError:
         raise AccountInputError("An employee already uses that email.", field="email") from None
     send_account_email(employee, "setup")
+    return employee
+
+
+def resend_verification_for(*, actor, employee_id):
+    """Send an applicant a new verify link. Shares the applicant's own resend limit, so the two can't add up."""
+    _require_administrator(actor)
+    employee = next((employee for employee in awaiting_verification() if str(employee.pk) == str(employee_id)), None)
+    if employee is None:
+        raise AccountInputError("This applicant has already confirmed their email address.")
+    if rate_limited("account_email", f"verify:{employee.pk}"):
+        raise AccountInputError("A link was sent to this applicant recently. Try again later.")
+    send_account_email(employee, "verify")
     return employee
 
 

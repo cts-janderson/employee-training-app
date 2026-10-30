@@ -29,8 +29,6 @@ from .sign_in_protection import record_event
 
 RP_NAME = "Employee Training"
 CHALLENGE_MINUTES = 5
-REAUTHENTICATION_MINUTES = 5
-_REAUTHENTICATED_AT = "passkey_reauthenticated_at"
 
 
 class PasskeyError(Exception):
@@ -83,25 +81,14 @@ def prune_challenges(*, now=None):
 
 # Re-entering the password
 
-def reauthenticate(request, employee, password):
-    """Check the current password before a passkey is added or removed, with its own failure limit."""
+def reauthenticate(employee, password):
+    """Check the current password in the same request as a passkey change, with its own failure limit."""
     key = str(employee.pk)
     if limit_reached("reauthenticate", key):
         raise PasskeyError("Too many wrong passwords. Wait a while and try again.")
     if not password or not employee.check_password(password):
         rate_limited("reauthenticate", key)
         raise PasskeyError("That password isn't correct.")
-    request.session[_REAUTHENTICATED_AT] = timezone.now().timestamp()
-
-
-def _recently_reauthenticated(request):
-    at = request.session.get(_REAUTHENTICATED_AT)
-    return at is not None and timezone.now().timestamp() - at < REAUTHENTICATION_MINUTES * 60
-
-
-def _use_reauthentication(request):
-    # One password re-entry allows one change, so a hijacked session can't add several passkeys with it.
-    request.session.pop(_REAUTHENTICATED_AT, None)
 
 
 def _require_administrator(employee):
@@ -111,11 +98,14 @@ def _require_administrator(employee):
 
 # Adding a passkey
 
-def registration_options(request, employee):
-    """Creation options for a new discoverable, user-verified passkey, as JSON."""
+def registration_options(request, employee, password):
+    """Creation options for a new discoverable, user-verified passkey, as JSON.
+
+    Each set of options needs the password, and its challenge is the grant for exactly one passkey:
+    the challenge is used up atomically, so parallel requests can't add two passkeys with one entry.
+    """
     _require_administrator(employee)
-    if not _recently_reauthenticated(request):
-        raise PasskeyError("Enter your password again.")
+    reauthenticate(employee, password)
     if employee.webauthn_user_handle is None:
         Employee.objects.filter(pk=employee.pk, webauthn_user_handle__isnull=True) \
             .update(webauthn_user_handle=secrets.token_bytes(32))
@@ -136,8 +126,6 @@ def registration_options(request, employee):
 def register(request, employee, credential_json, name):
     """Verify a new passkey and store it. Returns the Passkey."""
     _require_administrator(employee)
-    if not _recently_reauthenticated(request):
-        raise PasskeyError("Enter your password again.")
     name = (name or "").strip()[:100] or "Passkey"
     try:
         credential = parse_registration_credential_json(credential_json)
@@ -160,21 +148,18 @@ def register(request, employee, credential_json, name):
             sign_count=verified.sign_count, transports=[str(t.value) for t in credential.response.transports or []],
             name=name, created_at=timezone.now())
         record_event(SecurityEvent.Kind.PASSKEY_ADDED, employee=employee, actor=employee, detail=name)
-    _use_reauthentication(request)
     return passkey
 
 
-def remove(request, employee, passkey_id):
-    """Remove one of the administrator's own passkeys after a recent password re-entry."""
-    if not _recently_reauthenticated(request):
-        raise PasskeyError("Enter your password again.")
+def remove(employee, passkey_id, password):
+    """Remove one of the administrator's own passkeys, checking the password in the same request."""
+    reauthenticate(employee, password)
     with transaction.atomic():
         passkey = Passkey.objects.select_for_update().filter(pk=passkey_id, employee=employee).first()
         if passkey is None:
             raise PasskeyError("That passkey has already been removed.")
         passkey.delete()
         record_event(SecurityEvent.Kind.PASSKEY_REMOVED, employee=employee, actor=employee, detail=passkey.name)
-    _use_reauthentication(request)
 
 
 def remove_all(employee):

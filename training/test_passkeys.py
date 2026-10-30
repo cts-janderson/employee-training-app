@@ -212,16 +212,15 @@ class PasskeyTests(TestCase):
         retried = self.json_post(client, "passkey_sign_in_verify", {"credential": authenticator.get(options)})
         self.assertContains(retried, "expired", status_code=400)
 
-    def test_one_password_reentry_allows_one_change(self):
-        first, second = FakeAuthenticator(), FakeAuthenticator()
-        options = [self.admin_browser.post(reverse("passkey_register_options"), {"password": PASSWORD}).json()
-                   for _ in range(2)]
-        added = self.json_post(self.admin_browser, "passkey_register_verify",
-                               {"credential": first.create(options[0]), "name": "First"})
+    def test_each_passkey_needs_its_own_password_entry(self):
+        options = self.admin_browser.post(reverse("passkey_register_options"), {"password": PASSWORD}).json()
+        credential = FakeAuthenticator().create(options)
+        added = self.json_post(self.admin_browser, "passkey_register_verify", {"credential": credential, "name": "A"})
         self.assertEqual(added.status_code, 200)
-        refused = self.json_post(self.admin_browser, "passkey_register_verify",
-                                 {"credential": second.create(options[1]), "name": "Second"})
-        self.assertContains(refused, "Enter your password again", status_code=400)
+        # The same password entry's challenge can't add another passkey.
+        replayed = FakeAuthenticator().create(options)
+        refused = self.json_post(self.admin_browser, "passkey_register_verify", {"credential": replayed, "name": "B"})
+        self.assertContains(refused, "expired", status_code=400)
         self.assertEqual(Passkey.objects.count(), 1)
 
     # Removing passkeys
@@ -280,3 +279,33 @@ class ConcurrentPasskeyTests(TransactionTestCase):
         for thread in threads:
             thread.join()
         self.assertEqual(sorted(statuses), [200, 400])
+
+    def test_one_password_entry_sent_twice_at_once_adds_one_passkey(self):
+        real_employee("admin@example.com", role=Employee.Role.ADMINISTRATOR)
+        admin = Client(HTTP_HOST="localhost")
+        admin.post(reverse("sign_in"), {"username": "admin@example.com", "password": PASSWORD})
+        options = admin.post(reverse("passkey_register_options"), {"password": PASSWORD}).json()
+        credentials = [FakeAuthenticator().create(options) for _ in range(2)]
+        cookies = admin.cookies
+        barrier, statuses = threading.Barrier(2), []
+
+        def run(credential):
+            close_old_connections()
+            try:
+                browser = Client(HTTP_HOST="localhost")
+                browser.cookies = cookies
+                barrier.wait()
+                statuses.append(browser.post(reverse("passkey_register_verify"),
+                                             json.dumps({"credential": credential, "name": "Laptop"}),
+                                             content_type="application/json").status_code)
+            finally:
+                connections.close_all()
+
+        threads = [threading.Thread(target=run, args=(credential,)) for credential in credentials]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(sorted(statuses), [200, 400])
+        self.assertEqual(Passkey.objects.count(), 1)
+

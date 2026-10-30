@@ -1,9 +1,12 @@
+import re
+
 from django.conf import settings
 from django.contrib.auth import logout, update_session_auth_hash, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.http import HttpResponseRedirect
 from django.contrib.auth.views import INTERNAL_RESET_SESSION_TOKEN
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import redirect, render
@@ -14,10 +17,12 @@ from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.http import require_http_methods
 
 from .accounts import (
+    ACCOUNT_EMAILS,
     AccountInputError,
     AccountState,
     account_state,
     awaiting_setup,
+    awaiting_verification,
     decide_application,
     invite_employee,
     is_account_administrator,
@@ -26,17 +31,20 @@ from .accounts import (
     normalize_email,
     pending_applications,
     rate_limited,
+    real_administrator_exists,
     redeem_link,
     register,
     request_password_reset,
     resend_setup,
     resend_verification,
+    resend_verification_for,
     reset_tokens,
     setup_tokens,
     verification_tokens,
     verify_email,
 )
-from .dev_auth import account_admin_required, mark_real_session, clear_real_session
+from .dev_auth import (account_admin_required, admin_required, clear_real_session, demo_enabled,
+                       demo_environment_required, mark_real_session)
 from .models import Employee
 from .sign_in_protection import (
     active_block,
@@ -69,9 +77,17 @@ def _blocked(request):
                     link=reverse("sign_in"), link_text="Administrators: sign in with a passkey")
 
 
+def _first_run_hint():
+    """Locally, point at the command that creates the first real administrator. Production never shows it."""
+    return demo_enabled() and not real_administrator_exists()
+
+
 class SignInView(auth_views.LoginView):
     template_name = "training/sign_in.html"
     redirect_authenticated_user = True
+
+    def get_context_data(self, **kwargs):
+        return {**super().get_context_data(**kwargs), "first_run_hint": _first_run_hint()}
 
     def post(self, request, *args, **kwargs):
         self.network, email = client_network(request), normalize_email(request.POST.get("username"))
@@ -280,27 +296,64 @@ def account_admin(request):
                 decide_application(actor=request.employee, employee_id=request.POST.get("employee_id"),
                                    approve=action == "approve")
             elif action == "resend_setup":
-                resend_setup(actor=request.employee, employee_id=request.POST.get("employee_id"))
+                employee = resend_setup(actor=request.employee, employee_id=request.POST.get("employee_id"))
+                request.session["account_resend"] = {"link": "setup", "employee_id": str(employee.pk)}
+            elif action == "resend_verification":
+                employee = resend_verification_for(actor=request.employee,
+                                                   employee_id=request.POST.get("employee_id"))
+                request.session["account_resend"] = {"link": "confirmation", "employee_id": str(employee.pk)}
             else:
                 error = AccountInputError("Choose an action.")
         except AccountInputError as exc:
             error = exc
         if not error:
             return redirect("account_admin")
+    notice, notice_failed = _resend_notice(request)
     return render(request, "training/account_admin.html", _admin_context(
-        error=error, form_name=request.POST.get("name", "") if error else "",
+        error=error, notice=notice, notice_failed=notice_failed,
+        form_name=request.POST.get("name", "") if error else "",
         form_email=request.POST.get("email", "") if error else "",
     ), status=400 if error else 200)
+
+
+def _resend_notice(request):
+    """Report a resend by its recorded outcome. The send has finished by the next page view; the request can't tell."""
+    resend = request.session.pop("account_resend", None)
+    employee = resend and Employee.objects.filter(pk=resend["employee_id"]).first()
+    if not employee:
+        return "", False
+    if employee.link_send_failed_at:
+        return f"The {resend['link']} link to {employee.email} may not have been sent. Try again later.", True
+    return f"{resend['link'].capitalize()} link sent to {employee.email}.", False
 
 
 def _admin_context(**extra):
     return {
         "applications": pending_applications(),
+        "unconfirmed": awaiting_verification(),
         "invited": awaiting_setup(),
         "recent": Employee.objects.filter(is_demo=False, approval_decided_at__isnull=False)
                   .select_related("approval_decided_by").order_by("-approval_decided_at")[:20],
         **extra,
     }
+
+
+@admin_required
+def demo_accounts(request):
+    """Tell a demo administrator why real accounts aren't theirs to manage, without showing any."""
+    if not request.employee.is_demo:
+        return redirect("account_admin")
+    return render(request, "training/demo_accounts.html", {"first_run_hint": _first_run_hint()})
+
+
+@demo_environment_required
+def local_outbox(request):
+    """Account emails this server process sent to the in-memory sink, newest first, for local testing."""
+    subjects = {subject for subject, _route, _tokens in ACCOUNT_EMAILS.values()}
+    emails = [{"to": ", ".join(message.to), "subject": message.subject,
+               "link": (re.search(r"https?://\S+", message.body) or [""])[0]}
+              for message in reversed(getattr(mail, "outbox", [])) if message.subject in subjects]
+    return render(request, "training/local_outbox.html", {"emails": emails[:50]})
 
 
 @require_http_methods(["GET", "POST"])

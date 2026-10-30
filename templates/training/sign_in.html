@@ -3,6 +3,13 @@
 {% block title %}Sign in · Employee Training{% endblock %}
 {% block content %}
   <h1>Sign in</h1>
+  {% if first_run_hint %}
+    <div class="card stack">
+      <p><strong>No administrator account exists yet.</strong> Create the first one from the project folder, then sign in with it:</p>
+      <pre><code>.venv/bin/python manage.py create_administrator --name "…" --email …</code></pre>
+      <p class="muted">Export the variables <code>scripts/start-local.sh</code> sets first, including <code>DATABASE_URL</code>.</p>
+    </div>
+  {% endif %}
   {% if limited %}<p class="error" role="alert">Too many sign-in attempts. Wait a while and try again.</p>{% endif %}
   {% if form.non_field_errors %}<p class="error" role="alert">{{ form.non_field_errors|join:" " }}</p>{% endif %}
   <form class="card stack" method="post">
