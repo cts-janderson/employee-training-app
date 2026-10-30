@@ -21,7 +21,7 @@ If you use a different database name, user, host, or port, export a matching `DA
 ./scripts/start-local.sh
 ```
 
-The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, starts the import-review cleanup loop, and starts Django at <http://localhost:8000/>. The cleanup loop stops when the startup script exits. Visit `/health/` for a simple health response. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
+The script sets `DJANGO_DEBUG=1`, `DEV_AUTH_STUB=1`, and loopback-only allowed hosts. It supplies the default `DATABASE_URL` if none is exported, applies all migrations, creates the `.test` demo administrator, starts the import-review cleanup loop, and starts Django at <http://localhost:8000/>. Use `localhost`, not `127.0.0.1`, throughout: cookies and email links are per host. The cleanup loop stops when the startup script exits. Visit `/health/` for a simple health response. The demo actor switcher and protected pages require a loopback request; they are local stand-ins for identity integration.
 
 You can run the steps separately when diagnosing startup:
 
@@ -56,7 +56,7 @@ Sign-in, registration, approval, invitations and password reset work locally wit
    .venv/bin/python manage.py unblock_address 127.0.0.1
    ```
 
-5. To try passkeys, set `APP_BASE_URL=http://localhost:8000` and open the app at `localhost`, not `127.0.0.1`: WebAuthn refuses an IP address as the site. Add a passkey under **Your account** as a real administrator. In Chrome, DevTools → **WebAuthn** → **Enable virtual authenticator environment** gives a passkey without a physical device. `manage.py remove_passkeys --email …` removes an administrator's passkeys.
+5. Passkeys need the app opened at `http://localhost:8000` (the default `APP_BASE_URL`), not `127.0.0.1`: WebAuthn refuses an IP address as the site. Add a passkey under **Your account** as a real administrator. In Chrome, DevTools → **WebAuthn** → **Enable virtual authenticator environment** gives a passkey without a physical device. `manage.py remove_passkeys --email …` removes an administrator's passkeys.
 
 Real accounts can't use the demo switcher, and demo profiles can't sign in with a password.
 

@@ -50,19 +50,19 @@ Codex reviewed a first draft on October 30, 2026. Its corrections are folded in 
 
 - Dependency: `webauthn` (py_webauthn, Duo Labs) `>=3.0.1,<4`. The browser side is a small `passkeys.js` that calls `navigator.credentials` with options from the server, with no bundler. Ceremony POSTs send the CSRF token.
 - New `Passkey` model: `employee`, `credential_id` (unique), `public_key`, `sign_count`, `transports`, `name`, `created_at`, `last_used_at`. `Employee` gains `webauthn_user_handle`: 32 random bytes, created on first use, never the email.
-- New `PasskeyChallenge` model: `challenge`, `purpose` (`register` or `authenticate`), `session_key`, `employee` (registration only), `expires_at` (5 minutes), `used_at`. Verification uses up the challenge with `UPDATE … SET used_at = now() WHERE used_at IS NULL AND expires_at > now()` and continues only if one row changed. A challenge from another session or purpose is refused.
+- New `PasskeyChallenge` model: `challenge`, `purpose` (`register` or `authenticate`), `session_key`, `employee` (registration only), `expires_at` (5 minutes), `used_at`. Verification uses up the challenge, in its own transaction so a refusal can't roll the use back, with `UPDATE … SET used_at = now() WHERE used_at IS NULL AND expires_at > now()` and continues only if one row changed. A challenge from another session or purpose is refused.
 - The relying party ID is the hostname of `APP_BASE_URL`, and the expected origin is its scheme, host and port. WebAuthn refuses an IP address as a relying party ID, so passkeys work locally only with `APP_BASE_URL=http://localhost:8000`. Update `.env.example` and the local development guide.
 - **Adding a passkey** (on **Your account**, for active real administrators):
   - The administrator re-enters their password. This has its own limit, `reauthenticate` (5 failures per 15 minutes per employee). A success is stored in the session for 5 minutes.
   - Registration options require a discoverable credential (`resident_key=REQUIRED`) and user verification (`REQUIRED`). They name the stable user handle and list existing credentials in `exclude_credentials`.
   - Verification passes `require_user_verification=True`. The challenge must belong to this session and this employee, and the employee must still be an active real administrator.
   - The page lists the administrator's passkeys and warns when there is only one: "Add a second passkey in case you lose this device."
-  - Removing a passkey also needs a recent password re-entry.
+  - Removing a passkey also needs a password re-entry. Each re-entry allows one change.
 - **Signing in with a passkey:**
   - The sign-in page shows **Sign in with a passkey**. Options use `user_verification=REQUIRED` and no `allow_credentials`, so the browser offers discoverable credentials. `passkey_options` (300 per 15 minutes per network) limits how many challenges are issued.
   - Verification looks up the credential by ID, then requires the response's `userHandle` to equal its owner's `webauthn_user_handle`. It passes `require_user_verification=True`, and it updates `sign_count` and `last_used_at` under `select_for_update`.
   - The library accepts a count of 0 followed by 0, and it refuses an equal or lower count once either value is positive.
-  - Failed verifications count against `passkey_failures` (10 per 15 minutes per credential), not per network, so office traffic can't use up an administrator's way in.
+  - Failed verifications count against `passkey_failures` (10 per 15 minutes per credential and network). Office traffic can't use up an administrator's way in, and because credential IDs aren't secret, failures from another network can't lock it either.
   - The employee must be an active real administrator. Then Django's `login()` and the existing real-session marking run, and a trusted-device cookie is set.
 - A passkey stops working when its employee is deactivated or stops being an administrator, because every ceremony checks this.
 
@@ -152,7 +152,7 @@ A → F → B → C → E → D, each as a commit on the `sign-in-attack-protect
 
 ## Status
 
-**Implemented October 30, 2026,** on the `sign-in-attack-protection` branch, in `training/sign_in_protection.py`, `training/passkeys.py`, `training/passkey_views.py`, `static/training/passkeys.js`, migration `0020`, and the `unblock_address` and `remove_passkeys` commands.
+**Implemented October 30, 2026,** on the `sign-in-attack-protection` branch, in `training/sign_in_protection.py`, `training/passkeys.py`, `training/passkey_views.py`, `training/static/training/passkeys.js`, migration `0020`, and the `unblock_address` and `remove_passkeys` commands.
 
 - Networks are stored in CIDR form: `203.0.113.7/32` for IPv4, the `/64` for IPv6. `unblock_address` accepts a bare address.
 - `_client()` became `client_address()` in `training/sign_in_protection.py`.

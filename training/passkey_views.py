@@ -80,7 +80,7 @@ def sign_in_options(request):
 @require_POST
 def sign_in_verify(request):
     try:
-        employee = passkeys.authenticate(request, _credential(request))
+        employee = passkeys.authenticate(request, _credential(request), client_network(request))
     except PasskeyError as exc:
         return _error(str(exc))
     login(request, employee, backend=BACKEND)

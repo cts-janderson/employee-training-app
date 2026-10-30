@@ -99,6 +99,11 @@ def _recently_reauthenticated(request):
     return at is not None and timezone.now().timestamp() - at < REAUTHENTICATION_MINUTES * 60
 
 
+def _use_reauthentication(request):
+    # One password re-entry allows one change, so a hijacked session can't add several passkeys with it.
+    request.session.pop(_REAUTHENTICATED_AT, None)
+
+
 def _require_administrator(employee):
     if not is_account_administrator(employee):
         raise PasskeyError("Only administrators can use passkeys.")
@@ -139,8 +144,9 @@ def register(request, employee, credential_json, name):
     except (InvalidJSONStructure, InvalidRegistrationResponse, ValueError, TypeError):
         raise PasskeyError("The passkey response was incomplete.")
     rp_id, origin = relying_party()
+    # Used up before the transaction, so a refused response can't roll the use back and retry the challenge.
+    challenge = _use_challenge(request, credential, PasskeyChallenge.Purpose.REGISTER, employee)
     with transaction.atomic():
-        challenge = _use_challenge(request, credential, PasskeyChallenge.Purpose.REGISTER, employee)
         try:
             verified = verify_registration_response(credential=credential, expected_challenge=challenge,
                                                     expected_rp_id=rp_id, expected_origin=origin,
@@ -154,6 +160,7 @@ def register(request, employee, credential_json, name):
             sign_count=verified.sign_count, transports=[str(t.value) for t in credential.response.transports or []],
             name=name, created_at=timezone.now())
         record_event(SecurityEvent.Kind.PASSKEY_ADDED, employee=employee, actor=employee, detail=name)
+    _use_reauthentication(request)
     return passkey
 
 
@@ -167,6 +174,7 @@ def remove(request, employee, passkey_id):
             raise PasskeyError("That passkey has already been removed.")
         passkey.delete()
         record_event(SecurityEvent.Kind.PASSKEY_REMOVED, employee=employee, actor=employee, detail=passkey.name)
+    _use_reauthentication(request)
 
 
 def remove_all(employee):
@@ -188,19 +196,21 @@ def authentication_options(request):
     return options_to_json(options)
 
 
-def authenticate(request, credential_json):
-    """Verify a passkey sign-in and return its administrator. Failures count against the passkey."""
+def authenticate(request, credential_json, network):
+    """Verify a passkey sign-in and return its administrator. Failures count against the passkey and network."""
     try:
         credential = parse_authentication_credential_json(credential_json)
     except (InvalidJSONStructure, InvalidAuthenticationResponse, ValueError, TypeError):
         raise PasskeyError("The passkey response was incomplete.")
-    failure_key = credential.raw_id.hex()
+    # Credential IDs aren't secret, so failures from one network can't lock the administrator out of another.
+    failure_key = f"{credential.raw_id.hex()}:{network}"
     if limit_reached("passkey_failures", failure_key):
         raise PasskeyError("Too many failed passkey sign-ins. Wait a while and try again.")
     rp_id, origin = relying_party()
     try:
+        # Used up before the transaction, so a refused response can't roll the use back and retry the challenge.
+        challenge = _use_challenge(request, credential, PasskeyChallenge.Purpose.AUTHENTICATE)
         with transaction.atomic():
-            challenge = _use_challenge(request, credential, PasskeyChallenge.Purpose.AUTHENTICATE)
             passkey = Passkey.objects.select_for_update().select_related("employee") \
                 .filter(credential_id=credential.raw_id).first()
             if passkey is None:

@@ -90,11 +90,11 @@ class PasskeyTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         return authenticator
 
-    def passkey_sign_in(self, authenticator, client=None, **kwargs):
+    def passkey_sign_in(self, authenticator, client=None, address="127.0.0.1", **kwargs):
         client = client or self.browser()
-        options = client.post(reverse("passkey_sign_in_options"), REMOTE_ADDR="127.0.0.1").json()
+        options = client.post(reverse("passkey_sign_in_options"), REMOTE_ADDR=address).json()
         return client, self.json_post(client, "passkey_sign_in_verify",
-                                      {"credential": authenticator.get(options, **kwargs)})
+                                      {"credential": authenticator.get(options, **kwargs)}, REMOTE_ADDR=address)
 
     # Adding a passkey
 
@@ -193,6 +193,28 @@ class PasskeyTests(TestCase):
             self.passkey_sign_in(authenticator, origin="https://evil.example")
         _, response = self.passkey_sign_in(authenticator)
         self.assertContains(response, "Too many failed passkey sign-ins", status_code=400)
+
+    @override_settings(ACCOUNT_RATE_LIMITS=limits(passkey_failures=2))
+    def test_passkey_failures_from_another_network_dont_lock_the_administrator_out(self):
+        authenticator = self.add_passkey()
+        for _ in range(2):
+            self.passkey_sign_in(authenticator, address="203.0.113.9", origin="https://evil.example")
+        _, response = self.passkey_sign_in(authenticator)
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_a_refused_response_still_uses_up_its_challenge(self):
+        authenticator = self.add_passkey()
+        client = self.browser()
+        options = client.post(reverse("passkey_sign_in_options")).json()
+        refused = self.json_post(client, "passkey_sign_in_verify",
+                                 {"credential": authenticator.get(options, origin="https://evil.example")})
+        self.assertEqual(refused.status_code, 400)
+        retried = self.json_post(client, "passkey_sign_in_verify", {"credential": authenticator.get(options)})
+        self.assertContains(retried, "expired", status_code=400)
+
+    def test_one_password_reentry_allows_one_change(self):
+        self.add_passkey()
+        self.assertNotIn("passkey_reauthenticated_at", self.admin_browser.session)
 
     # Removing passkeys
 

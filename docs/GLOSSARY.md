@@ -133,7 +133,7 @@ A period during which a network that sent many wrong passwords can't sign in, re
 _Avoid_: Ban, lockout, IP block
 
 **Passkey**:
-A credential an administrator unlocks with a device's PIN or biometric check, which signs the administrator in even from a blocked network.
+A credential that an administrator unlocks with a device's PIN or biometric check instead of typing a password, so signing in proves possession of that device.
 _Avoid_: Security key, MAC address
 
 **Document**:
