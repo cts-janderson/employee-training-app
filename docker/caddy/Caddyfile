@@ -4,7 +4,7 @@
 	log default {
 		format filter {
 			# Any path with a percent-escape is redacted too: Django routes /account/%76erify/... like /account/verify/.
-			request>uri regexp "^(?:([^?]*?/account/(?:verify|reset|setup)/)[^?]*|[^?]*%[^?]*)" "${1}[redacted]/"
+			request>uri regexp "^(?:([^?%]*?/account/(?:verify|reset|setup)/)[^?]*|[^?]*%[^?]*)" "${1}[redacted]/"
 			request>headers>Referer delete
 		}
 	}
