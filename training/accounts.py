@@ -1,5 +1,6 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
 import hashlib
+import hmac
 import logging
 import unicodedata
 from contextlib import contextmanager
@@ -120,7 +121,7 @@ def rate_limited(scope, key, *, now=None):
             f"INSERT INTO {table} (scope, key_digest, window_start, count) VALUES (%s, %s, %s, 1) "
             f"ON CONFLICT (scope, key_digest, window_start) DO UPDATE SET count = {table}.count + 1 "
             "RETURNING count",
-            [scope, hashlib.sha256(key.encode()).hexdigest(), window_start],
+            [scope, hmac.new(settings.SECRET_KEY.encode(), key.encode(), hashlib.sha256).hexdigest(), window_start],
         )
         return cursor.fetchone()[0] > limit
 
