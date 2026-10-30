@@ -1,0 +1,34 @@
+{
+	# Caddy's error logs carry the request. Account links hold a live token in the path, and a page reached from
+	# one names it in Referer, so neither may reach the log (the app's own logs redact them too).
+	log default {
+		format filter {
+			# Everything after an account link is dropped, query included. Any other target with a percent-escape or
+			# a second /account/ is redacted whole: Django routes /account/%76erify/... like /account/verify/.
+			request>uri regexp "^(?:([^?%]*?/account/(?:verify|reset|setup)/).*|.*(?:%|/account/).*)" "${1}[redacted]/"
+			request>headers>Referer delete
+		}
+	}
+}
+
+# TLS_MODE=cloudflare (the default) gets a public certificate through a Cloudflare DNS-01 challenge.
+# TLS_MODE=internal uses Caddy's own CA, for a local stack only.
+(tls_cloudflare) {
+	tls {
+		dns cloudflare {$CF_API_TOKEN}
+	}
+}
+
+(tls_internal) {
+	tls internal
+}
+
+{$APP_HOST} {
+	import tls_{$TLS_MODE:cloudflare}
+
+	reverse_proxy web:8000 {
+		# Replace anything the client sent: the app trusts the last entry because only this proxy reaches it.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto https
+	}
+}

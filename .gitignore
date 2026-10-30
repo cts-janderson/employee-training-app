@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 .envrc
 
 # Python environments and generated files.

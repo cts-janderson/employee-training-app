@@ -238,11 +238,11 @@ The send function returns the delivery result instead of swallowing errors. The 
 
 ## Status
 
-Nothing started. Update this section as each step finishes.
+Update this section as each step finishes.
 
 | Step | State | PR | Notes |
 |---|---|---|---|
-| 1 | not started | | |
+| 1 | done | `container-packaging` | See [step 1 notes](#step-1-notes). 482 tests pass. |
 | 2 | not started | | |
 | 3 | not started | | |
 | 4 | not started | | |
@@ -252,3 +252,37 @@ Nothing started. Update this section as each step finishes.
 | 9 | not started | | |
 | 10 | not started | | |
 | 11 | not started | | |
+
+### Step 1 notes
+
+Done October 30, 2026:
+
+- **Images.** `Dockerfile` installs the dependencies with `pip install .` and runs the app from `/app` as user `app` (uid 10001), with static files built at image build time. `docker/caddy/` builds Caddy with the Cloudflare DNS module.
+- **Roles.** `docker/entrypoint.sh` runs `migrate`, `web`, `worker`, `cleanup`, `healthcheck` or `manage <command>`.
+- **Stack.** `compose.yaml`:
+  - Every app service runs with `init: true`, so SIGTERM reaches Python. The worker has `stop_grace_period: 60s`.
+  - Networks: `web` has no published ports. It shares `edge` (`172.30.0.0/24`) with the proxy alone and `web_db` with `db` alone, so no other container can send it forwarded headers. `TRUSTED_PROXY_NETWORKS` is the proxy's fixed address, `172.30.0.10/32`. `db`, `migrate`, `worker` and `cleanup` share `jobs`. Neither `web_db` nor `jobs` has internet access. `worker` also joins `egress` to reach Graph.
+  - App services run with `no-new-privileges` and no Linux capabilities.
+  - `TLS_MODE=internal` switches Caddy to its own CA for a local stack.
+- **Database roles.** `docker/postgres/provision-roles.sql` (run by `provision-roles.sh`) does what step 1 above describes. It runs in one transaction and also moves any table not owned by `training_owner` to it, for a restore made as the superuser. `docker/postgres/check-roles.sh` runs the permission checks. Step 2's restore rehearsal reuses both.
+- **App changes.** `/health/` runs `SELECT 1` and returns 503 when it fails. `cleanup_training_imports` also runs `clearsessions` once at start and then hourly with `--loop`. Gunicorn's access and error logs redact account links through `config/gunicorn_logging.py`.
+- **Verified** with a throwaway stack (`TLS_MODE=internal`, placeholder Graph values):
+  - Migrations ran as `training_owner`.
+  - `check-roles.sh` passed, before and after rerunning provisioning on the existing volume.
+  - `/health/` returned 200 through Caddy, and 503 with `db` stopped. Plain http got a 308 to https.
+  - The proxy replaced a forged `X-Forwarded-For` with the client address and set `X-Forwarded-Proto: https`.
+  - A reset-link token showed as `[redacted]` in gunicorn's access log.
+  - `docker compose stop worker` took 1 second and logged "Notification worker stopped."
+  - The upgrade steps from plan 30 ran: stop, `run --rm migrate`, `up -d`.
+  - `check --deploy` in the image reports only the two HSTS warnings.
+- **Not verified:** the Cloudflare DNS-01 certificate (needs the zone token) and sending through a real Graph tenant. Both are owner actions under plan 30 step H.
+- **Review fixes:**
+  - Gunicorn's timeout is 120 seconds, not 30, because account emails still go out in the request. A token request, a send, and a refresh and resend after a 401 can each wait 15 seconds to connect and 15 for the answer.
+  - Caddy's 502 error entries carry the request. Its runtime log therefore drops everything after an account link, redacts any other target with a percent-escape or a second `/account/`, and drops `Referer`.
+  - The app's logs replace a path and query that hide an encoded account link with `/account/[redacted]/`. They never log the decoded text.
+- **For step 4:** once account emails leave the request path, put gunicorn's timeout back to 30 seconds in `docker/entrypoint.sh`.
+- **For step 3:**
+  - Document the upgrade procedure, provisioning by hand (`exec db sh /provision/provision-roles.sh`) and `check-roles.sh`.
+  - Say that `172.30.0.0/24` must not clash with the host's networks.
+  - `web` still sends account emails itself until step 4, so it can reach the internet through `edge`.
+- The `backups` volume is declared for step 2's `backup` service.
