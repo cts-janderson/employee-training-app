@@ -278,8 +278,8 @@ Done October 30, 2026:
 - **Not verified:** the Cloudflare DNS-01 certificate (needs the zone token) and sending through a real Graph tenant. Both are owner actions under plan 30 step H.
 - **Review fixes:**
   - Gunicorn's timeout is 120 seconds, not 30, because account emails still go out in the request. A token request, a send, and a refresh and resend after a 401 can each wait 15 seconds to connect and 15 for the answer.
-  - Caddy's 502 error entries carry the request. Its runtime log therefore redacts account-link paths and any path with a percent-escape, and drops `Referer`.
-  - The app's logs replace a percent-encoded account link with `/account/[redacted]/`, without decoding the rest of the line.
+  - Caddy's 502 error entries carry the request. Its runtime log therefore drops everything after an account link, redacts any other target with a percent-escape or a second `/account/`, and drops `Referer`.
+  - The app's logs replace a path and query that hide an encoded account link with `/account/[redacted]/`. They never log the decoded text.
 - **For step 4:** once account emails leave the request path, put gunicorn's timeout back to 30 seconds in `docker/entrypoint.sh`.
 - **For step 3:**
   - Document the upgrade procedure, provisioning by hand (`exec db sh /provision/provision-roles.sh`) and `check-roles.sh`.

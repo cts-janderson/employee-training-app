@@ -127,9 +127,12 @@ class RedactionTests(SimpleTestCase):
                          "GET /account/[redacted]/ HTTP/1.1")
         self.assertEqual(redact_account_links("GET /account/reset/MTIz%2Ftok-en/"), "GET /account/[redacted]/")
         self.assertEqual(redact_account_links("GET /search/?q=a%20b"), "GET /search/?q=a%20b")
-        # Only the path is replaced; an encoded newline elsewhere stays encoded, so it can't forge a log line.
+        self.assertEqual(redact_account_links("GET /?next=%2Faccount%2Freset%2FMTIz%2Ftok-en%2F HTTP/1.1"),
+                         "GET /account/[redacted]/ HTTP/1.1")
+        # The decoded form is never logged, so an encoded newline can't forge a log line.
         self.assertEqual(redact_account_links("GET /account/%76erify/MTIz/tok-en/?x=%0AFORGED HTTP/1.1"),
-                         "GET /account/[redacted]/?x=%0AFORGED HTTP/1.1")
+                         "GET /account/[redacted]/ HTTP/1.1")
+        self.assertEqual(redact_account_links("GET /search/?q=%0AFORGED HTTP/1.1"), "GET /search/?q=%0AFORGED HTTP/1.1")
 
     def test_redaction_of_a_long_run_of_slashes_stays_fast(self):
         # A header of slashes once made the encoded-path search rescan from every slash.
