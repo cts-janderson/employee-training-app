@@ -131,7 +131,7 @@ Done; see **Status** below. These parts move to later steps:
 
 The October 29, 2026 security review of the Slice 29 and 31 commits found no critical or high issues. These low findings belong with the steps above:
 
-- **Step D:** add a per-IP counter and a per-email counter to sign-in, so one password can't be tried across many emails or addresses without a cap.
+- **Step D (done):** add a per-IP counter and a per-email counter to sign-in, so one password can't be tried across many emails or addresses without a cap.
 - **Step C:** send account emails off the request path, so the reset response time doesn't reveal whether an email is registered.
 - **Step C:** give each link purpose its own counter, so a reset request doesn't cancel an outstanding verification or setup link.
 - **Step A follow-up:** let administrators reject or remove an unverified applicant, or expire one automatically. Today an unverified registration blocks an invitation to the same address.
@@ -162,6 +162,14 @@ The October 29, 2026 security review of the Slice 29 and 31 commits found no cri
 - Tests are in `training/test_mail.py`. Nothing has been sent through a real tenant yet; that needs the Entra app registration from step H.
 
 Still open from the review findings: separate link counters per purpose, and sending account emails off the request path to hide timing.
+
+**Step D, implemented October 30, 2026.** `RateLimitCounter` (migration `0019`) replaces the per-process cache:
+
+- `rate_limited()` in `training/accounts.py` counts each request with one `INSERT … ON CONFLICT DO UPDATE … RETURNING count` in a fixed window aligned to the scope's length. A request at the end of one window and the start of the next can therefore reach up to twice the limit.
+- Each counter stores a SHA-256 of its key, so client addresses and emails aren't kept in the table.
+- Sign-in now counts three keys on every attempt: address and email together (5 per 15 minutes), the address alone (100), and the email alone (20). The address limit is high because employees in one office can share an address. The email limit lets someone block one employee's sign-in for up to 15 minutes; that trade-off closes spreading one password across many addresses.
+- `cleanup_training_imports` also deletes counters whose window ended in every scope, until step E gives the `cleanup` service its own loop.
+- Tests in `training/test_accounts.py` cover the window reset with a controllable time, separate scopes and keys, pruning, both new sign-in limits, and 8 parallel increments on PostgreSQL. The full PostgreSQL suite passed: 388 tests.
 
 Gunicorn's access-log redaction comes with step E. Other open items, also for step E:
 

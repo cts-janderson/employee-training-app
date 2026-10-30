@@ -82,7 +82,11 @@ class SignInView(auth_views.LoginView):
     redirect_authenticated_user = True
 
     def post(self, request, *args, **kwargs):
-        if rate_limited("sign_in", f"{_client(request)}:{normalize_email(request.POST.get('username'))}"):
+        client, email = _client(request), normalize_email(request.POST.get("username"))
+        # Every counter is incremented, so one password can't be spread across many emails or addresses.
+        counts = [rate_limited("sign_in", f"{client}:{email}"), rate_limited("sign_in_client", client),
+                  rate_limited("sign_in_email", email)]
+        if any(counts):
             # An unbound form, so the limited attempt never reaches authentication.
             form = self.get_form_class()(request)
             return self.render_to_response(self.get_context_data(form=form, limited=True), status=429)

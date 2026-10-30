@@ -43,7 +43,7 @@ The parent plan lists decisions to settle. This slice takes its proposed default
 
 - Moving assignment, group, report, renewal and notification queries from `is_demo` to an eligibility rule for real employees (parent plan step 4).
 - Login email changes, administrator role changes, last-administrator protection, reapplication, and retention of rejected applications.
-- A provider-backed email backend, sender configuration review, and a shared cache for rate limits in deployment (parent plan step 5). The in-process cache resets on restart and isn't shared between workers, so rate limiting **blocks rollout** until a shared cache is configured.
+- A provider-backed email backend, sender configuration review, and a shared cache for rate limits in deployment (parent plan step 5). The in-process cache reset on restart and wasn't shared between workers, so rate limiting blocked rollout. [Plan 30](30-production-deployment.md) step D replaced it with a PostgreSQL counter table.
 - A session version that a deactivation bumps. Today a deactivated employee's session stops working, but it would work again if the employee were reactivated before it expired. Real-employee deactivation has no interface yet, so this lands with it.
 
 ## Review

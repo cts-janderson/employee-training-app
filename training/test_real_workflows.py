@@ -5,7 +5,6 @@ from datetime import timedelta
 
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core import mail
-from django.core.cache import cache
 from django.db import close_old_connections, connection, connections
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -191,7 +190,6 @@ class RealEmployeeWorkflowTests(TestCase):
         self.assertTrue(response["Location"].startswith(reverse("sign_in")))
 
     def test_unicode_email_variants_share_one_sign_in_limit(self):
-        cache.clear()
         for variant in ["worker@example.com", "ＷＯＲＫＥＲ@example.com", "ｗorker@example.com",
                         "worker@ｅxample.com", "Worker@Example.com"]:
             self.client.post(reverse("sign_in"), {"username": variant, "password": "wrong"})

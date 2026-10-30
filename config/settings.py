@@ -103,8 +103,12 @@ LOGIN_URL = "sign_in"
 LOGIN_REDIRECT_URL = "home"
 # Verification, setup and reset links share this lifetime.
 PASSWORD_RESET_TIMEOUT = 24 * 60 * 60
-# Rate limits use the default per-process cache until a shared cache is configured for deployment.
-ACCOUNT_RATE_LIMITS = {"sign_in": (5, 15 * 60), "register": (5, 60 * 60), "account_email": (3, 60 * 60)}
+# (limit, window in seconds), counted in RateLimitCounter. Employees in one office can share an address,
+# so the per-address sign-in limit is generous.
+ACCOUNT_RATE_LIMITS = {
+    "sign_in": (5, 15 * 60), "sign_in_client": (100, 15 * 60), "sign_in_email": (20, 15 * 60),
+    "register": (5, 60 * 60), "account_email": (3, 60 * 60),
+}
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG

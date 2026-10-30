@@ -1,14 +1,15 @@
 """Email and password accounts for employees; see docs/plans/29-sign-in-skeleton.md."""
+import hashlib
 import logging
 import unicodedata
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth.hashers import UNUSABLE_PASSWORD_PREFIX, make_password
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import PasswordResetTokenGenerator, default_token_generator
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
@@ -20,7 +21,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from .mail import PermanentMailError, TransientMailError
-from .models import Employee
+from .models import Employee, RateLimitCounter
 
 logger = logging.getLogger("training.accounts")
 
@@ -107,17 +108,29 @@ setup_tokens = _PurposeTokenGenerator("setup")
 reset_tokens = _PurposeTokenGenerator("reset")
 
 
-def rate_limited(scope, key):
-    """Count a request and report whether the scope's limit is exceeded. The default cache is per process."""
+def rate_limited(scope, key, *, now=None):
+    """Count a request in the scope's current fixed window and report whether the limit is exceeded."""
     limit, window = settings.ACCOUNT_RATE_LIMITS[scope]
-    cache_key = f"account-rate:{scope}:{key}"
-    if cache.add(cache_key, 1, window):
-        return False
-    try:
-        return cache.incr(cache_key) > limit
-    except ValueError:
-        cache.add(cache_key, 1, window)
-        return False
+    seconds = int((now or timezone.now()).timestamp())
+    window_start = datetime.fromtimestamp(seconds - seconds % window, tz=dt_timezone.utc)
+    table = connection.ops.quote_name(RateLimitCounter._meta.db_table)
+    with connection.cursor() as cursor:
+        # One atomic upsert, so parallel requests in any process each get their own count.
+        cursor.execute(
+            f"INSERT INTO {table} (scope, key_digest, window_start, count) VALUES (%s, %s, %s, 1) "
+            f"ON CONFLICT (scope, key_digest, window_start) DO UPDATE SET count = {table}.count + 1 "
+            "RETURNING count",
+            [scope, hashlib.sha256(key.encode()).hexdigest(), window_start],
+        )
+        return cursor.fetchone()[0] > limit
+
+
+def prune_rate_limits(*, now=None):
+    """Delete counters whose window has ended in every scope; returns how many were removed."""
+    longest = max(window for _, window in settings.ACCOUNT_RATE_LIMITS.values())
+    count, _ = RateLimitCounter.objects.filter(
+        window_start__lte=(now or timezone.now()) - timedelta(seconds=longest)).delete()
+    return count
 
 
 def _link(route, employee, tokens):
