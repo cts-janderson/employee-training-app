@@ -5,7 +5,6 @@ from unittest import mock, skipUnless
 from urllib.parse import urlsplit
 
 from django.core import mail
-from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import close_old_connections, connection, connections
@@ -14,8 +13,9 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .accounts import AccountInputError, decide_application, invite_employee, register
-from .models import Assignment, Employee, Slide, Training, TrainingVersion
+from .accounts import (AccountInputError, decide_application, invite_employee, prune_rate_limits, rate_limited,
+                       register)
+from .models import Assignment, Employee, RateLimitCounter, Slide, Training, TrainingVersion
 
 PASSWORD = "correct horse battery"
 NEW_PASSWORD = "another long passphrase"
@@ -32,7 +32,6 @@ def real_employee(email, *, role=Employee.Role.EMPLOYEE, password=PASSWORD, **fi
 @override_settings(DEBUG=True, DEV_AUTH_STUB=True, DEV_ADMIN_EMAIL="demo.admin@example.test")
 class AccountTests(TestCase):
     def setUp(self):
-        cache.clear()
         self.client.defaults["HTTP_HOST"] = "localhost"
         self.demo_admin = Employee.objects.create(name="Demo admin", email="demo.admin@example.test",
                                                   role=Employee.Role.ADMINISTRATOR, is_demo=True)
@@ -217,10 +216,30 @@ class AccountTests(TestCase):
                 self.assertContains(response, "If an account uses that address")
         self.assertEqual(mail.outbox, [])
 
-    @override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (2, 60), "register": (1, 60), "account_email": (1, 60)})
+    @override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (2, 60), "sign_in_client": (100, 60), "sign_in_email": (100, 60),
+                                            "register": (1, 60), "account_email": (1, 60)})
     def test_repeated_sign_in_attempts_are_limited(self):
         for _ in range(2):
             self.assertEqual(self.sign_in("admin@example.com", "wrong password here").status_code, 200)
+        self.assertEqual(self.sign_in("admin@example.com").status_code, 429)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    @override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (100, 60), "sign_in_client": (100, 60), "sign_in_email": (2, 60),
+                                            "register": (1, 60), "account_email": (1, 60)})
+    def test_sign_in_attempts_for_one_email_are_limited_across_addresses(self):
+        for address in ("10.0.0.1", "10.0.0.2"):
+            self.client.post(reverse("sign_in"), {"username": "admin@example.com", "password": "wrong"},
+                             REMOTE_ADDR=address)
+        response = self.client.post(reverse("sign_in"), {"username": "admin@example.com", "password": PASSWORD},
+                                    REMOTE_ADDR="10.0.0.3")
+        self.assertEqual(response.status_code, 429)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    @override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (100, 60), "sign_in_client": (2, 60), "sign_in_email": (100, 60),
+                                            "register": (1, 60), "account_email": (1, 60)})
+    def test_sign_in_attempts_from_one_address_are_limited_across_emails(self):
+        for email in ("first@example.com", "second@example.com"):
+            self.client.post(reverse("sign_in"), {"username": email, "password": PASSWORD})
         self.assertEqual(self.sign_in("admin@example.com").status_code, 429)
         self.assertNotIn("_auth_user_id", self.client.session)
 
@@ -237,6 +256,61 @@ class AccountTests(TestCase):
 
     def test_demo_employees_get_unusable_passwords(self):
         self.assertFalse(self.demo_admin.has_usable_password())
+
+
+@override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (2, 60), "register": (1, 60 * 60)})
+class RateLimitTests(TestCase):
+    def setUp(self):
+        self.now = timezone.now().replace(minute=0, second=0, microsecond=0)
+
+    def test_limit_applies_within_a_window_and_resets_in_the_next(self):
+        results = [rate_limited("sign_in", "10.0.0.1:a@example.com", now=self.now + timedelta(seconds=n))
+                   for n in range(3)]
+        self.assertEqual(results, [False, False, True])
+        self.assertFalse(rate_limited("sign_in", "10.0.0.1:a@example.com", now=self.now + timedelta(seconds=60)))
+
+    def test_scopes_and_keys_count_separately(self):
+        for _ in range(2):
+            rate_limited("sign_in", "a", now=self.now)
+        self.assertFalse(rate_limited("sign_in", "b", now=self.now))
+        self.assertFalse(rate_limited("register", "a", now=self.now))
+
+    def test_counters_store_a_digest_not_the_key(self):
+        rate_limited("sign_in", "10.0.0.1:a@example.com", now=self.now)
+        digest = RateLimitCounter.objects.get().key_digest
+        self.assertEqual(len(digest), 64)
+        self.assertNotIn("example", digest)
+
+    def test_pruning_removes_counters_only_after_the_longest_window_ends(self):
+        rate_limited("sign_in", "a", now=self.now)
+        self.assertEqual(prune_rate_limits(now=self.now + timedelta(minutes=59)), 0)
+        self.assertEqual(prune_rate_limits(now=self.now + timedelta(hours=1)), 1)
+        self.assertFalse(RateLimitCounter.objects.exists())
+
+
+@skipUnless(connection.vendor == "postgresql", "PostgreSQL upsert under concurrency")
+@override_settings(ACCOUNT_RATE_LIMITS={"sign_in": (5, 60)})
+class ConcurrentRateLimitTests(TransactionTestCase):
+    def test_parallel_requests_each_get_their_own_count(self):
+        workers, now = 8, timezone.now()
+        barrier = threading.Barrier(workers)
+        results = []
+
+        def run():
+            close_old_connections()
+            try:
+                barrier.wait()
+                results.append(rate_limited("sign_in", "10.0.0.1:race@example.com", now=now))
+            finally:
+                connections.close_all()
+
+        threads = [threading.Thread(target=run) for _ in range(workers)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(RateLimitCounter.objects.get().count, workers)
+        self.assertEqual(sorted(results), [False] * 5 + [True] * 3)
 
 
 @skipUnless(connection.vendor == "postgresql", "PostgreSQL uniqueness under concurrency")

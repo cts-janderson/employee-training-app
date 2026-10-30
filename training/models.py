@@ -803,3 +803,16 @@ class WorkerHeartbeat(models.Model):
     """When each background worker last finished a cycle, so operators can tell a stalled worker."""
     name = models.CharField(max_length=50, primary_key=True)
     beat_at = models.DateTimeField()
+
+
+class RateLimitCounter(models.Model):
+    """Account requests counted in one fixed window, shared by every process that serves requests."""
+    scope = models.CharField(max_length=50)
+    # An HMAC-SHA256 of the limited key under SECRET_KEY: without the secret, nobody can test a guessed email or address.
+    key_digest = models.CharField(max_length=64)
+    window_start = models.DateTimeField()
+    count = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["scope", "key_digest", "window_start"],
+                                               name="unique_rate_limit_window")]

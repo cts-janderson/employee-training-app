@@ -26,7 +26,7 @@ Outcome: one Docker Compose stack that runs on any Linux host with outbound HTTP
   - `backup`: `pg_dump` with an off-host copy
 
   Record this in ADR-0010, which amends the hosting paragraph of ADR-0002.
-- **Email through Microsoft Graph `sendMail`, not SMTP AUTH.** Microsoft is disabling Basic SMTP AUTH by default for existing tenants at the end of December 2026. Django's SMTP backend can't use OAuth, and a relay connector needs port 25 plus a static IP or certificate, which conflicts with "any host". Graph uses the client-credentials flow: an Entra app registration with the `Mail.Send` application permission, limited to the sender mailbox by an Exchange application access policy. It needs only outbound HTTPS. Its responses also make failures easy to classify (see step C). Record this in ADR-0011.
+- **Email through Microsoft Graph `sendMail`, not SMTP AUTH.** Microsoft is disabling Basic SMTP AUTH by default for existing tenants at the end of December 2026. Django's SMTP backend can't use OAuth, and a relay connector needs port 25 plus a static IP or certificate, which conflicts with "any host". Graph uses the client-credentials flow: an Entra app registration with the `Mail.Send` application permission, limited to the sender mailbox through Exchange RBAC for Applications. It needs only outbound HTTPS. Its responses also make failures easy to classify (see step C). Record this in ADR-0011.
 - **TLS:** Caddy obtains a public certificate through an ACME DNS-01 challenge against the `critical-technology.com` Cloudflare zone. This needs a custom Caddy build with the Cloudflare DNS module (`xcaddy`). It works whether or not the host is reachable from the internet, and no client has to trust a private CA.
 - **Rate limits:** stored in a dedicated PostgreSQL counter table with an atomic upsert, not in Django's `DatabaseCache`. That cache's `incr` isn't atomic, it resets expiry, and culling can drop live counters.
 - **Stub isolation:** production runs with `DJANGO_DEBUG=0` and `DEV_AUTH_STUB=0`. The existing `ImproperlyConfigured` guard enforces this.
@@ -72,8 +72,8 @@ Done; see **Status** below. These parts move to later steps:
 
 ### D. Rate-limit store
 
-- Add a `RateLimitCounter(scope, key, window_start, count)` model with a unique constraint on (scope, key, window_start). `rate_limited()` performs one `INSERT … ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count`.
-- Expired rows are deleted by the `cleanup` loop.
+- Add a `RateLimitCounter(scope, key_digest, window_start, count)` model with a unique constraint on (scope, key_digest, window_start). `key_digest` is an HMAC-SHA256 of the limited key. `rate_limited()` performs one `INSERT … ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count`.
+- Ended windows are deleted by `prune_rate_limits()`, which `cleanup_training_imports` calls until step E's `cleanup` loop runs it.
 - Add a PostgreSQL concurrency test (N parallel increments → count N) and a window-expiry test with a controllable clock.
 
 ### E. Container packaging (new files)
@@ -116,7 +116,7 @@ Done; see **Status** below. These parts move to later steps:
 
 - `docs/deployment.md`:
   - Host prerequisites: Docker, outbound HTTPS, a DNS name, and a Cloudflare DNS token.
-  - Entra and Exchange setup: app registration, `Mail.Send`, the application access policy, sender mailbox, SPF and DKIM.
+  - Entra and Exchange setup: app registration, the scoped `Application Mail.Send` role (no Entra-level grant), sender mailbox, SPF and DKIM; see [RBAC for Applications](https://learn.microsoft.com/en-us/exchange/permissions-exo/application-rbac).
   - First deployment, then `create_administrator`, which prompts for a password.
   - Upgrade and rollback, logs, backup and restore, secret rotation (client secret expiry), and the `ops_status` alert runbook (ambiguous notification reconciliation, worker restart).
   - Offboarding.
@@ -124,14 +124,14 @@ Done; see **Status** below. These parts move to later steps:
 
 ### H. Release gates (owner actions)
 
-- The owner names the operational owner and approves the data policy, then provisions the host and DNS name, the Entra app registration with admin consent, the access policy, and the off-host backup target.
+- The owner names the operational owner and approves the data policy, then provisions the host and DNS name, the Entra app registration with its Exchange-scoped mail permission, and the off-host backup target.
 - Run a smoke deployment with synthetic data on the target host before inviting any real employee.
 
 ### Review findings to fold in
 
 The October 29, 2026 security review of the Slice 29 and 31 commits found no critical or high issues. These low findings belong with the steps above:
 
-- **Step D:** add a per-IP counter and a per-email counter to sign-in, so one password can't be tried across many emails or addresses without a cap.
+- **Step D (done):** add a per-IP counter and a per-email counter to sign-in, so one password can't be tried across many emails or addresses without a cap.
 - **Step C:** send account emails off the request path, so the reset response time doesn't reveal whether an email is registered.
 - **Step C:** give each link purpose its own counter, so a reset request doesn't cancel an outstanding verification or setup link.
 - **Step A follow-up:** let administrators reject or remove an unverified applicant, or expire one automatically. Today an unverified registration blocks an invitation to the same address.
@@ -162,6 +162,14 @@ The October 29, 2026 security review of the Slice 29 and 31 commits found no cri
 - Tests are in `training/test_mail.py`. Nothing has been sent through a real tenant yet; that needs the Entra app registration from step H.
 
 Still open from the review findings: separate link counters per purpose, and sending account emails off the request path to hide timing.
+
+**Step D, implemented October 30, 2026.** `RateLimitCounter` (migration `0019`) replaces the per-process cache:
+
+- `rate_limited()` in `training/accounts.py` counts each request with one `INSERT … ON CONFLICT DO UPDATE … RETURNING count` in a fixed window aligned to the scope's length. A request at the end of one window and the start of the next can therefore reach up to twice the limit.
+- Each counter stores an HMAC-SHA256 of its key under `SECRET_KEY`. A plain hash of an email or address could be confirmed by guessing; the keyed hash can't be without the secret. Changing `SECRET_KEY` resets every counter.
+- Sign-in now counts three keys on every attempt: address and email together (5 per 15 minutes), the address alone (100), and the email alone (20). The address limit is high because employees in one office can share an address. The email limit lets someone block one employee's sign-in for up to 15 minutes; that trade-off closes spreading one password across many addresses.
+- `cleanup_training_imports` also deletes counters whose window ended in every scope, until step E gives the `cleanup` service its own loop.
+- Tests in `training/test_accounts.py` cover the window reset with a controllable time, separate scopes and keys, pruning, both new sign-in limits, and 8 parallel increments on PostgreSQL. The full PostgreSQL suite passed: 388 tests.
 
 Gunicorn's access-log redaction comes with step E. Other open items, also for step E:
 
